@@ -41,7 +41,10 @@ func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *URLStorag
 		return
 	}
 
-	shortenID := generateShortID()
+	shortenID, err := generateShortID()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 	storage.Set(shortenID, originalURL)
 	shortURL := "http://" + r.Host + "/" + shortenID
 
@@ -59,7 +62,8 @@ func shortenURLRedirect(w http.ResponseWriter, r *http.Request, storage *URLStor
 
 	originalURL, exists := storage.Get(id)
 	if !exists {
-		badRequest(w, "URL not found")
+		http.Error(w, "URL not found", http.StatusNotFound)
+		return
 	}
 
 	w.Header().Set("Location", originalURL)
@@ -104,13 +108,17 @@ func (s *URLStorage) Set(id, originalURL string) {
 func (s *URLStorage) Get(id string) (string, bool) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
+	// getting key from map returns additional bool output ('false' if key doesn't exist)
 	url, ok := s.data[id]
 	return url, ok
 }
 
 // id generator
-func generateShortID() string {
+func generateShortID() (string, error) {
 	bytes := make([]byte, 6)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
