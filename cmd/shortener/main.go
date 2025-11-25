@@ -41,7 +41,9 @@ func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *URLStorag
 		return
 	}
 
-	shortenID, err := generateShortID()
+	// TODO:
+	//shortenID, err := generateShortID()
+	shortenID, err := generateUniqID(storage)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -121,4 +123,19 @@ func generateShortID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
+}
+
+func generateUniqID(storage *URLStorage) (string, error) {
+	maxAttempts := 10
+	for i := 0; i < maxAttempts; i++ {
+		id, err := generateShortID()
+		if err != nil {
+			return "", err
+		}
+
+		if _, exists := storage.Get(id); !exists {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("failed to generate unique ID")
 }
