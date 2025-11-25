@@ -2,6 +2,8 @@ package memory
 
 import (
 	"sync"
+
+	"github.com/bissquit/url-shortener/internal/repository"
 )
 
 // in-memory url storage
@@ -10,7 +12,7 @@ type URLStorage struct {
 	data map[string]string
 }
 
-func NewURLStorage() *URLStorage {
+func NewURLStorage() repository.URLRepository {
 	return &URLStorage{
 		data: make(map[string]string),
 	}

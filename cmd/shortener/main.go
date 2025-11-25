@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 )
 
@@ -23,7 +24,7 @@ func badRequest(w http.ResponseWriter, message string) {
 	http.Error(w, "Bad request", http.StatusBadRequest)
 }
 
-func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *memory.URLStorage) {
+func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage repository.URLRepository) {
 	if r.Header.Get("Content-Type") != "text/plain" {
 		badRequest(w, "Content-Type must be text/plain")
 		return
@@ -42,8 +43,6 @@ func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *memory.UR
 		return
 	}
 
-	// TODO:
-	//shortenID, err := generateShortID()
 	shortenID, err := generateUniqID(storage)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -56,7 +55,7 @@ func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *memory.UR
 	fmt.Fprint(w, shortURL)
 }
 
-func shortenURLRedirect(w http.ResponseWriter, r *http.Request, storage *memory.URLStorage) {
+func shortenURLRedirect(w http.ResponseWriter, r *http.Request, storage repository.URLRepository) {
 	id := r.URL.Path[1:]
 	if id == "" {
 		badRequest(w, "Invalid Path")
@@ -100,7 +99,7 @@ func generateShortID() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func generateUniqID(storage *memory.URLStorage) (string, error) {
+func generateUniqID(storage repository.URLRepository) (string, error) {
 	maxAttempts := 10
 	for i := 0; i < maxAttempts; i++ {
 		id, err := generateShortID()
