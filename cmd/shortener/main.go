@@ -8,7 +8,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"sync"
+
+	"github.com/bissquit/url-shortener/internal/repository/memory"
 )
 
 func main() {
@@ -22,7 +23,7 @@ func badRequest(w http.ResponseWriter, message string) {
 	http.Error(w, "Bad request", http.StatusBadRequest)
 }
 
-func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *URLStorage) {
+func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *memory.URLStorage) {
 	if r.Header.Get("Content-Type") != "text/plain" {
 		badRequest(w, "Content-Type must be text/plain")
 		return
@@ -55,7 +56,7 @@ func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage *URLStorag
 	fmt.Fprint(w, shortURL)
 }
 
-func shortenURLRedirect(w http.ResponseWriter, r *http.Request, storage *URLStorage) {
+func shortenURLRedirect(w http.ResponseWriter, r *http.Request, storage *memory.URLStorage) {
 	id := r.URL.Path[1:]
 	if id == "" {
 		badRequest(w, "Invalid Path")
@@ -73,7 +74,7 @@ func shortenURLRedirect(w http.ResponseWriter, r *http.Request, storage *URLStor
 }
 
 func run() error {
-	storage := NewURLStorage()
+	storage := memory.NewURLStorage()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -89,32 +90,6 @@ func run() error {
 	return http.ListenAndServe(`:8080`, mux)
 }
 
-// in-memory url storage
-type URLStorage struct {
-	mux  sync.RWMutex
-	data map[string]string
-}
-
-func NewURLStorage() *URLStorage {
-	return &URLStorage{
-		data: make(map[string]string),
-	}
-}
-
-func (s *URLStorage) Set(id, originalURL string) {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-	s.data[id] = originalURL
-}
-
-func (s *URLStorage) Get(id string) (string, bool) {
-	s.mux.RLock()
-	defer s.mux.RUnlock()
-	// getting key from map returns additional bool output ('false' if key doesn't exist)
-	url, ok := s.data[id]
-	return url, ok
-}
-
 // id generator
 func generateShortID() (string, error) {
 	bytes := make([]byte, 6)
@@ -125,7 +100,7 @@ func generateShortID() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func generateUniqID(storage *URLStorage) (string, error) {
+func generateUniqID(storage *memory.URLStorage) (string, error) {
 	maxAttempts := 10
 	for i := 0; i < maxAttempts; i++ {
 		id, err := generateShortID()
