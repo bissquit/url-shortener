@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +9,7 @@ import (
 
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
+	"github.com/bissquit/url-shortener/internal/service"
 )
 
 func main() {
@@ -43,7 +42,7 @@ func shortenURLCreate(w http.ResponseWriter, r *http.Request, storage repository
 		return
 	}
 
-	shortenID, err := generateUniqID(storage)
+	shortenID, err := service.GenerateUniqID(storage)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -87,29 +86,4 @@ func run() error {
 		}
 	})
 	return http.ListenAndServe(`:8080`, mux)
-}
-
-// id generator
-func generateShortID() (string, error) {
-	bytes := make([]byte, 6)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
-func generateUniqID(storage repository.URLRepository) (string, error) {
-	maxAttempts := 10
-	for i := 0; i < maxAttempts; i++ {
-		id, err := generateShortID()
-		if err != nil {
-			return "", err
-		}
-
-		if _, exists := storage.Get(id); !exists {
-			return id, nil
-		}
-	}
-	return "", fmt.Errorf("failed to generate unique ID")
 }
