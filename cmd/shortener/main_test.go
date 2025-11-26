@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/bissquit/url-shortener/internal/handler"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 )
 
-func Test_shortenURLCreate(t *testing.T) {
+func Test_HandlersCreate(t *testing.T) {
 	type args struct {
 		w http.ResponseWriter
 		r *http.Request
@@ -19,9 +20,10 @@ func Test_shortenURLCreate(t *testing.T) {
 		// TODO: Add test cases.
 	}
 	storage := memory.NewURLStorage()
+	handlers := handler.NewURLHandlers(storage, "http://localhost:8080")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			shortenURLCreate(tt.args.w, tt.args.r, storage)
+			handlers.Create(tt.args.w, tt.args.r)
 		})
 	}
 }
