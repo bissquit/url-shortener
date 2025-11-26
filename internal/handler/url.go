@@ -45,6 +45,7 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	shortenID, err := service.GenerateUniqID(h.storage)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	h.storage.Set(shortenID, originalURL)
 
