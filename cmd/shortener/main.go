@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/handler"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 )
@@ -15,8 +16,9 @@ func main() {
 }
 
 func run() error {
+	config := config.NewConfig()
 	storage := memory.NewURLStorage()
-	handlers := handler.NewURLHandlers(storage, "http://localhost:8080")
+	handlers := handler.NewURLHandlers(storage, config.BaseURL)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
