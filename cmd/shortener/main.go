@@ -1,35 +1,20 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
+	"log"
 
 	"github.com/bissquit/url-shortener/internal/config"
-	"github.com/bissquit/url-shortener/internal/handler"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
+	"github.com/bissquit/url-shortener/internal/server"
 )
 
 func main() {
-	if err := run(); err != nil {
-		panic(err)
-	}
-}
-
-func run() error {
-	config := config.NewConfig()
+	cfg := config.New()
 	storage := memory.NewURLStorage()
-	handlers := handler.NewURLHandlers(storage, config.BaseURL)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/" && r.Method == http.MethodPost:
-			handlers.Create(w, r)
-		case r.URL.Path != "/" && r.Method == http.MethodGet:
-			handlers.Redirect(w, r)
-		default:
-			handler.BadRequest(w, fmt.Sprintf("path %s, method %s", r.URL.Path, r.Method))
-		}
-	})
-	return http.ListenAndServe(`:8080`, mux)
+	srv := server.NewServer(cfg, storage)
+
+	if err := srv.Run(); err != nil {
+		log.Fatalf("failed to start server: %v", err)
+	}
 }

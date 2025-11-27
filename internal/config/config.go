@@ -1,11 +1,13 @@
 package config
 
 type Config struct {
-	BaseURL string
+	ServerAddr string
+	BaseURL    string
 }
 
-func NewConfig() *Config {
+func New() *Config {
 	return &Config{
-		BaseURL: "http://localhost:8080",
+		ServerAddr: ":8080",
+		BaseURL:    "http://localhost:8080",
 	}
 }
