@@ -30,14 +30,8 @@ func Test_NewServer(t *testing.T) {
 }
 
 func Test_ServerRoutes(t *testing.T) {
-	const (
-		testShortURL = "https://example.com"
-		testLongURL  = "https://www.google.com/imgres?q=long%20url&imgurl=https%3A%2F%2Fuser-images.githubusercontent.com%2F40697840%2F50132884-3060b300-02c4-11e9-981d-37a5109904c8.png&imgrefurl=https%3A%2F%2Fgithub.com%2Faxel-download-accelerator%2Faxel%2Fissues%2F185&docid=GZLL9SkdBlX8LM&tbnid=BbhwZrxNvXN14M&vet=12ahUKEwiygObH25KRAxUaJRAIHSfOJ7oQM3oECB8QAA..i&w=1133&h=505&hcb=2&ved=2ahUKEwiygObH25KRAxUaJRAIHSfOJ7oQM3oECB8QAA"
-	)
+	const testShortURL = "https://example.com"
 
-	type want struct {
-		statusCode int
-	}
 	tests := []struct {
 		name         string
 		method       string
@@ -45,7 +39,7 @@ func Test_ServerRoutes(t *testing.T) {
 		body         string
 		contentType  string
 		setupStorage func(repository.URLRepository)
-		want         want
+		wantStatus   int
 	}{
 		{
 			name:        "POST create short URL",
@@ -53,7 +47,7 @@ func Test_ServerRoutes(t *testing.T) {
 			path:        "/",
 			body:        testShortURL,
 			contentType: "text/plain",
-			want:        want{http.StatusCreated},
+			wantStatus:  http.StatusCreated,
 		},
 		{
 			name:   "GET redirect with existing ID",
@@ -62,7 +56,7 @@ func Test_ServerRoutes(t *testing.T) {
 			setupStorage: func(s repository.URLRepository) {
 				s.Set("skfjnvoe34nk", testShortURL)
 			},
-			want: want{http.StatusTemporaryRedirect},
+			wantStatus: http.StatusTemporaryRedirect,
 		},
 	}
 
@@ -84,18 +78,20 @@ func Test_ServerRoutes(t *testing.T) {
 				bodyReader = strings.NewReader(tt.body)
 			}
 
-			// create request
-			req := httptest.NewRequest(tt.method, tt.path, bodyReader)
+			// create Request
+			r := httptest.NewRequest(tt.method, tt.path, bodyReader)
 			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
+				r.Header.Set("Content-Type", tt.contentType)
 			}
 
+			// create ResponseWriter
 			w := httptest.NewRecorder()
-			srv.router.ServeHTTP(w, req)
 
-			assert.Equal(t, tt.want.statusCode, w.Code,
+			srv.router.ServeHTTP(w, r)
+
+			assert.Equal(t, tt.wantStatus, w.Code,
 				"Expected status %d, got %d for %s %s",
-				tt.want.statusCode, w.Code, tt.method, tt.path)
+				tt.wantStatus, w.Code, tt.method, tt.path)
 		})
 	}
 }
