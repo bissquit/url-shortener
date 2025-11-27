@@ -20,7 +20,6 @@ func Test_HandlersCreate(t *testing.T) {
 	// prepare data
 	config := config.NewConfig()
 	storage := memory.NewURLStorage()
-	//storage.Set("skfjnvoe34nk", "https://example.com")
 	handlers := handler.NewURLHandlers(storage, config.BaseURL)
 
 	// we should test only POST with "/" path because of Run() routing
@@ -35,8 +34,6 @@ func Test_HandlersCreate(t *testing.T) {
 	}
 	tests := []struct {
 		name        string
-		method      string
-		path        string
 		body        string
 		contentType string
 		want        want
@@ -86,7 +83,6 @@ func Test_HandlersCreate(t *testing.T) {
 
 			// check status code
 			assert.Equal(t, tt.want.code, res.StatusCode)
-			t.Logf("%v", res.StatusCode)
 
 			if tt.want.code == http.StatusCreated {
 				// check response structure
@@ -104,11 +100,111 @@ func Test_HandlersCreate(t *testing.T) {
 
 				// check if id was stored
 				id := strings.TrimPrefix(responseURL, config.BaseURL+"/")
-				//t.Logf("Short ID: %s", id)
 				originalURL, exists := storage.Get(id)
 				assert.True(t, exists, "Short ID is not stored")
 				// check if original url is correct
 				assert.Equal(t, tt.body, originalURL, "OriginalURL is wrong")
+			}
+		})
+	}
+}
+
+func Test_HandlersRedirect(t *testing.T) {
+	// prepare data
+	config := config.NewConfig()
+	storage := memory.NewURLStorage()
+	const (
+		testShortURL = "https://example.com"
+		testLongURL  = "https://www.google.com/imgres?q=long%20url&imgurl=https%3A%2F%2Fuser-images.githubusercontent.com%2F40697840%2F50132884-3060b300-02c4-11e9-981d-37a5109904c8.png&imgrefurl=https%3A%2F%2Fgithub.com%2Faxel-download-accelerator%2Faxel%2Fissues%2F185&docid=GZLL9SkdBlX8LM&tbnid=BbhwZrxNvXN14M&vet=12ahUKEwiygObH25KRAxUaJRAIHSfOJ7oQM3oECB8QAA..i&w=1133&h=505&hcb=2&ved=2ahUKEwiygObH25KRAxUaJRAIHSfOJ7oQM3oECB8QAA"
+	)
+	storage.Set("skfjnvoe34nk", testShortURL)
+	storage.Set("kjsdfbj4t9bb", testLongURL)
+	handlers := handler.NewURLHandlers(storage, config.BaseURL)
+
+	// we should test only POST with "/" path because of Run() routing
+	const (
+		testMethod = http.MethodGet
+	)
+	type want struct {
+		code     int
+		location string
+	}
+	tests := []struct {
+		name    string
+		shortID string
+		want    want
+	}{
+		{
+			name:    "successful redirect with short url",
+			shortID: "skfjnvoe34nk",
+			want: want{
+				code:     http.StatusTemporaryRedirect,
+				location: testShortURL,
+			},
+		},
+		{
+			name:    "successful redirect with long url",
+			shortID: "kjsdfbj4t9bb",
+			want: want{
+				code:     http.StatusTemporaryRedirect,
+				location: testLongURL,
+			},
+		},
+		{
+			name:    "empty short ID",
+			shortID: "",
+			want: want{
+				code: http.StatusBadRequest,
+			},
+		},
+		{
+			name:    "unexisted short ID",
+			shortID: "eriobbnxelke",
+			want: want{
+				code: http.StatusNotFound,
+			},
+		},
+		{
+			name:    "wrong format of short ID",
+			shortID: "37a510/9904c8.png&imgr/efurl=ht/tp/s%3A%2F%2F",
+			want: want{
+				code: http.StatusNotFound,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// create Request
+			r := httptest.NewRequest(testMethod, "/"+tt.shortID, nil)
+			// create ResponseWriter
+			w := httptest.NewRecorder()
+
+			// run func
+			handlers.Redirect(w, r)
+
+			res := w.Result()
+			defer res.Body.Close()
+			resBody, err := io.ReadAll(res.Body)
+			require.NoError(t, err)
+
+			if tt.want.code >= 400 {
+				// check error message if it's not a redirect
+				assert.NotEmpty(t, strings.TrimSpace(string(resBody)),
+					"Error responses should include a message")
+			}
+
+			// check status code
+			assert.Equal(t, tt.want.code, res.StatusCode)
+
+			if tt.want.code == http.StatusTemporaryRedirect {
+				// check if there is a valid url in the location
+				location := res.Header.Get("Location")
+				assert.Equal(t, tt.want.location, location)
+
+				// check if url is valid
+				_, err := url.ParseRequestURI(location)
+				assert.NoError(t, err, "URL invalid")
 			}
 		})
 	}
