@@ -17,11 +17,6 @@ import (
 )
 
 func Test_HandlersCreate(t *testing.T) {
-	// prepare data
-	config := config.NewConfig()
-	storage := memory.NewURLStorage()
-	handlers := handler.NewURLHandlers(storage, config.BaseURL)
-
 	// we should test only POST with "/" path because of Run() routing
 	const (
 		testMethod = http.MethodPost
@@ -64,6 +59,11 @@ func Test_HandlersCreate(t *testing.T) {
 			},
 		},
 	}
+
+	// initialize env
+	config := config.NewConfig()
+	storage := memory.NewURLStorage()
+	handlers := handler.NewURLHandlers(storage, config.BaseURL)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,21 +110,14 @@ func Test_HandlersCreate(t *testing.T) {
 }
 
 func Test_HandlersRedirect(t *testing.T) {
-	// prepare data
-	config := config.NewConfig()
-	storage := memory.NewURLStorage()
 	const (
+		// we should test only GET because of Run() routing
+		testMethod = http.MethodGet
+
 		testShortURL = "https://example.com"
 		testLongURL  = "https://www.google.com/imgres?q=long%20url&imgurl=https%3A%2F%2Fuser-images.githubusercontent.com%2F40697840%2F50132884-3060b300-02c4-11e9-981d-37a5109904c8.png&imgrefurl=https%3A%2F%2Fgithub.com%2Faxel-download-accelerator%2Faxel%2Fissues%2F185&docid=GZLL9SkdBlX8LM&tbnid=BbhwZrxNvXN14M&vet=12ahUKEwiygObH25KRAxUaJRAIHSfOJ7oQM3oECB8QAA..i&w=1133&h=505&hcb=2&ved=2ahUKEwiygObH25KRAxUaJRAIHSfOJ7oQM3oECB8QAA"
 	)
-	storage.Set("skfjnvoe34nk", testShortURL)
-	storage.Set("kjsdfbj4t9bb", testLongURL)
-	handlers := handler.NewURLHandlers(storage, config.BaseURL)
 
-	// we should test only POST with "/" path because of Run() routing
-	const (
-		testMethod = http.MethodGet
-	)
 	type want struct {
 		code     int
 		location string
@@ -172,6 +165,14 @@ func Test_HandlersRedirect(t *testing.T) {
 			},
 		},
 	}
+
+	// initialize env
+	config := config.NewConfig()
+	storage := memory.NewURLStorage()
+	// prepare test data
+	storage.Set("skfjnvoe34nk", testShortURL)
+	storage.Set("kjsdfbj4t9bb", testLongURL)
+	handlers := handler.NewURLHandlers(storage, config.BaseURL)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
