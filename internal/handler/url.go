@@ -9,6 +9,7 @@ import (
 
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/service"
+	"github.com/go-chi/chi/v5"
 )
 
 type URLHandlers struct {
@@ -57,7 +58,7 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[1:]
+	id := chi.URLParam(r, "id")
 	if id == "" {
 		BadRequest(w, "Invalid Path")
 		return
@@ -76,8 +77,4 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 func BadRequest(w http.ResponseWriter, message string) {
 	log.Printf("bad request: %s", message)
 	http.Error(w, "Bad request", http.StatusBadRequest)
-}
-
-func BadRequestHandler(w http.ResponseWriter, r *http.Request) {
-	BadRequest(w, fmt.Sprintf("path %s, method %s", r.URL.Path, r.Method))
 }
