@@ -1,15 +1,15 @@
 package handler
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/service"
-	"github.com/go-chi/chi/v5"
 )
 
 type URLHandlers struct {
@@ -54,7 +54,8 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprint(w, shortURL)
+	// write body, alternative for fmt.Fprint(w, shortURL)
+	w.Write([]byte(shortURL))
 }
 
 func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
