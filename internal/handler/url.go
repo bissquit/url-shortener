@@ -58,7 +58,15 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	var id string
+	// Chi params is only set when Chi router is configured
+	// but in tests we don't use Chi router, just raw methods
+	if paramID := chi.URLParam(r, "id"); paramID != "" {
+		id = paramID
+	} else {
+		id = r.URL.Path[1:]
+	}
+
 	if id == "" {
 		BadRequest(w, "Invalid Path")
 		return

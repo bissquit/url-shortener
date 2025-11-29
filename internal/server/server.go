@@ -39,6 +39,7 @@ func (s *Server) setupRoutes() {
 	h := handler.NewURLHandlers(s.storage, s.config.BaseURL)
 
 	s.router.Post("/", h.Create)
+	s.router.Get("/", h.Redirect)
 	s.router.Get("/{id}", h.Redirect)
 }
 
