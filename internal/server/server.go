@@ -29,13 +29,17 @@ func NewServer(config *config.Config, storage repository.URLRepository) *Server 
 }
 
 func (s *Server) setupRoutes() {
+	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		handler.BadRequest(w, "Not found")
+	})
+	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		handler.BadRequest(w, "Method not allowed")
+	})
+
 	h := handler.NewURLHandlers(s.storage, s.config.BaseURL)
 
 	s.router.Post("/", h.Create)
 	s.router.Get("/{id}", h.Redirect)
-
-	s.router.NotFound(handler.BadRequestHandler)
-	s.router.MethodNotAllowed(handler.BadRequestHandler)
 }
 
 func (s *Server) Run() error {
