@@ -1,9 +1,10 @@
 package server
 
 import (
-	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/handler"
@@ -13,14 +14,14 @@ import (
 type Server struct {
 	config  *config.Config
 	storage repository.URLRepository
-	router  *http.ServeMux
+	router  *chi.Mux
 }
 
 func NewServer(config *config.Config, storage repository.URLRepository) *Server {
 	s := &Server{
 		config:  config,
 		storage: storage,
-		router:  http.NewServeMux(),
+		router:  chi.NewRouter(),
 	}
 
 	s.setupRoutes()
@@ -28,18 +29,13 @@ func NewServer(config *config.Config, storage repository.URLRepository) *Server 
 }
 
 func (s *Server) setupRoutes() {
-	handlers := handler.NewURLHandlers(s.storage, s.config.BaseURL)
+	h := handler.NewURLHandlers(s.storage, s.config.BaseURL)
 
-	s.router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/" && r.Method == http.MethodPost:
-			handlers.Create(w, r)
-		case r.URL.Path != "/" && r.Method == http.MethodGet:
-			handlers.Redirect(w, r)
-		default:
-			handler.BadRequest(w, fmt.Sprintf("path %s, method %s", r.URL.Path, r.Method))
-		}
-	})
+	s.router.Post("/", h.Create)
+	s.router.Get("/{id}", h.Redirect)
+
+	s.router.NotFound(handler.BadRequestHandler)
+	s.router.MethodNotAllowed(handler.BadRequestHandler)
 }
 
 func (s *Server) Run() error {

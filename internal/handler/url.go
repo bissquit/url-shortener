@@ -77,3 +77,7 @@ func BadRequest(w http.ResponseWriter, message string) {
 	log.Printf("bad request: %s", message)
 	http.Error(w, "Bad request", http.StatusBadRequest)
 }
+
+func BadRequestHandler(w http.ResponseWriter, r *http.Request) {
+	BadRequest(w, fmt.Sprintf("path %s, method %s", r.URL.Path, r.Method))
+}
