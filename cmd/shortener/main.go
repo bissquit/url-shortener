@@ -10,8 +10,9 @@ import (
 
 func main() {
 	cfg := config.New()
-	storage := memory.NewURLStorage()
+	cfg.ParseFlags()
 
+	storage := memory.NewURLStorage()
 	srv := server.NewServer(cfg, storage)
 
 	if err := srv.Run(); err != nil {

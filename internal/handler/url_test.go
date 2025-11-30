@@ -60,9 +60,9 @@ func Test_HandlersCreate(t *testing.T) {
 	}
 
 	// initialize env
-	config := config.New()
+	cfg := config.New()
 	storage := memory.NewURLStorage()
-	handlers := NewURLHandlers(storage, config.BaseURL)
+	handlers := NewURLHandlers(storage, cfg.BaseURL)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,11 +94,11 @@ func Test_HandlersCreate(t *testing.T) {
 					"Response should be a valid URL")
 
 				// check correct url
-				assert.True(t, strings.HasPrefix(responseURL, config.BaseURL+"/"),
+				assert.True(t, strings.HasPrefix(responseURL, cfg.BaseURL+"/"),
 					"Response should start with baseURL")
 
 				// check if id was stored
-				id := strings.TrimPrefix(responseURL, config.BaseURL+"/")
+				id := strings.TrimPrefix(responseURL, cfg.BaseURL+"/")
 				originalURL, exists := storage.Get(id)
 				assert.True(t, exists, "Short ID is not stored")
 				// check if original url is correct
@@ -166,12 +166,12 @@ func Test_HandlersRedirect(t *testing.T) {
 	}
 
 	// initialize env
-	config := config.New()
+	cfg := config.New()
 	storage := memory.NewURLStorage()
 	// prepare test data
 	storage.Set("skfjnvoe34nk", testShortURL)
 	storage.Set("kjsdfbj4t9bb", testLongURL)
-	handlers := NewURLHandlers(storage, config.BaseURL)
+	handlers := NewURLHandlers(storage, cfg.BaseURL)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
