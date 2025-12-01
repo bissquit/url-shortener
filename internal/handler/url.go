@@ -45,7 +45,8 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	shortenID, err := service.GenerateUniqID(h.storage)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("ERROR: cannot generate shorten ID: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	h.storage.Set(shortenID, originalURL)
@@ -75,7 +76,7 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 
 	originalURL, exists := h.storage.Get(id)
 	if !exists {
-		http.Error(w, "URL not found", http.StatusNotFound)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 
@@ -85,5 +86,5 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 
 func BadRequest(w http.ResponseWriter, message string) {
 	log.Printf("bad request: %s", message)
-	http.Error(w, "Bad request", http.StatusBadRequest)
+	http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 }
