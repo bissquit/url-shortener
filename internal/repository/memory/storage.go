@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/bissquit/url-shortener/internal/repository"
@@ -31,7 +30,7 @@ func (s *URLStorage) Get(id string) (string, error) {
 	// getting key from map returns additional bool output ('false' if key doesn't exist)
 	url, ok := s.data[id]
 	if !ok {
-		return "", fmt.Errorf("ID '%s' not found", id)
+		return "", repository.ErrNotFound
 	}
 	return url, nil
 }

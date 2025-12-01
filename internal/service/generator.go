@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/bissquit/url-shortener/internal/repository"
@@ -26,8 +27,12 @@ func GenerateUniqID(storage repository.URLRepository) (string, error) {
 		}
 
 		_, err = storage.Get(id)
-		if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
 			return id, nil
+		}
+
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return "", fmt.Errorf("storage error: %w", err)
 		}
 	}
 	return "", fmt.Errorf("failed to generate unique ID after %d attempts", maxAttempts)

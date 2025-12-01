@@ -99,8 +99,8 @@ func Test_HandlersCreate(t *testing.T) {
 
 				// check if id was stored
 				id := strings.TrimPrefix(responseURL, cfg.BaseURL+"/")
-				originalURL, exists := storage.Get(id)
-				assert.True(t, exists, "Short ID is not stored")
+				originalURL, err := storage.Get(id)
+				assert.NoError(t, err, "Short ID is not stored")
 				// check if original url is correct
 				assert.Equal(t, tt.body, originalURL, "OriginalURL is wrong")
 			}
