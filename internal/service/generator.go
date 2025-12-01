@@ -19,15 +19,16 @@ func generateShortID() (string, error) {
 
 func GenerateUniqID(storage repository.URLRepository) (string, error) {
 	maxAttempts := 10
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		id, err := generateShortID()
 		if err != nil {
 			return "", err
 		}
 
-		if _, exists := storage.Get(id); !exists {
+		_, err = storage.Get(id)
+		if err != nil {
 			return id, nil
 		}
 	}
-	return "", fmt.Errorf("failed to generate unique ID")
+	return "", fmt.Errorf("failed to generate unique ID after %d attempts", maxAttempts)
 }

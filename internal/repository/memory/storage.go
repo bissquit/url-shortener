@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/bissquit/url-shortener/internal/repository"
@@ -24,10 +25,13 @@ func (s *URLStorage) Set(id, originalURL string) {
 	s.data[id] = originalURL
 }
 
-func (s *URLStorage) Get(id string) (string, bool) {
+func (s *URLStorage) Get(id string) (string, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 	// getting key from map returns additional bool output ('false' if key doesn't exist)
 	url, ok := s.data[id]
-	return url, ok
+	if !ok {
+		return "", fmt.Errorf("ID '%s' not found", id)
+	}
+	return url, nil
 }

@@ -80,8 +80,8 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	originalURL, exists := h.storage.Get(id)
-	if !exists {
+	originalURL, err := h.storage.Get(id)
+	if err != nil {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
