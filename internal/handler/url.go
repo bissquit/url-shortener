@@ -51,7 +51,12 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	h.storage.Set(shortenID, originalURL)
 
-	shortURL := h.baseURL + "/" + shortenID
+	shortURL, err := url.JoinPath(h.baseURL, shortenID)
+	if err != nil {
+		log.Printf("ERROR: cannot return shorten URL: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)

@@ -94,7 +94,7 @@ func Test_HandlersCreate(t *testing.T) {
 					"Response should be a valid URL")
 
 				// check correct url
-				assert.True(t, strings.HasPrefix(responseURL, cfg.BaseURL+"/"),
+				assert.True(t, strings.HasPrefix(responseURL, cfg.BaseURL),
 					"Response should start with baseURL")
 
 				// check if id was stored
