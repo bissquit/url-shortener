@@ -14,7 +14,7 @@ import (
 )
 
 func Test_NewServer(t *testing.T) {
-	cfg := config.New()
+	cfg := config.GetConfig()
 	storage := memory.NewURLStorage()
 
 	srv := NewServer(cfg, storage)
@@ -63,7 +63,7 @@ func Test_ServerRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := memory.NewURLStorage()
-			cfg := config.New()
+			cfg := config.GetDefaultConfig()
 
 			// configure storage if required
 			if tt.setupStorage != nil {

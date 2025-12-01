@@ -7,15 +7,21 @@ type Config struct {
 	BaseURL    string
 }
 
-func New() *Config {
+func GetDefaultConfig() *Config {
 	return &Config{
 		ServerAddr: ":8080",
 		BaseURL:    "http://localhost:8080",
 	}
 }
 
-func (c *Config) ParseFlags() {
-	flag.StringVar(&c.ServerAddr, "a", c.ServerAddr, "server address in host:port format (default :8080)")
-	flag.StringVar(&c.BaseURL, "b", c.BaseURL, "base URL (default http://localhost:8080)")
+func GetConfig() *Config {
+	cfg := GetDefaultConfig()
+
+	flag.StringVar(&cfg.ServerAddr, "a", cfg.ServerAddr,
+		"server address in host:port format (default :8080)")
+	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL,
+		"base URL (default http://localhost:8080)")
 	flag.Parse()
+
+	return cfg
 }

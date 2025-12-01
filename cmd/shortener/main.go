@@ -9,8 +9,7 @@ import (
 )
 
 func main() {
-	cfg := config.New()
-	cfg.ParseFlags()
+	cfg := config.GetConfig()
 
 	storage := memory.NewURLStorage()
 	srv := server.NewServer(cfg, storage)

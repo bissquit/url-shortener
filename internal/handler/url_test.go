@@ -60,7 +60,7 @@ func Test_HandlersCreate(t *testing.T) {
 	}
 
 	// initialize env
-	cfg := config.New()
+	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	handlers := NewURLHandlers(storage, cfg.BaseURL)
 
@@ -166,7 +166,7 @@ func Test_HandlersRedirect(t *testing.T) {
 	}
 
 	// initialize env
-	cfg := config.New()
+	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	// prepare test data
 	storage.Set("skfjnvoe34nk", testShortURL)
