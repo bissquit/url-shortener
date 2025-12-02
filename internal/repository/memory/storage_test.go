@@ -44,7 +44,7 @@ func Test_URLStorageGet(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, url, u)
 
-	u, err = s.Get("does-not-exist")
+	_, err = s.Get("does-not-exist")
 	assert.Error(t, err)
 	assert.Equal(t, repository.ErrNotFound, err)
 }
