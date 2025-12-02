@@ -3,10 +3,11 @@ package repository
 import "errors"
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound      = errors.New("not found")
+	ErrAlreadyExists = errors.New("already exists")
 )
 
 type URLRepository interface {
-	Set(id, originalURL string)
+	Create(id, originalURL string) error
 	Get(id string) (string, error)
 }

@@ -169,8 +169,8 @@ func Test_HandlersRedirect(t *testing.T) {
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	// prepare test data
-	storage.Set("skfjnvoe34nk", testShortURL)
-	storage.Set("kjsdfbj4t9bb", testLongURL)
+	storage.Create("skfjnvoe34nk", testShortURL)
+	storage.Create("kjsdfbj4t9bb", testLongURL)
 	handlers := NewURLHandlers(storage, cfg.BaseURL)
 
 	for _, tt := range tests {

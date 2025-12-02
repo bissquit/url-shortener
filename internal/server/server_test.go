@@ -54,7 +54,7 @@ func Test_ServerRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   "/skfjnvoe34nk",
 			setupStorage: func(s repository.URLRepository) {
-				s.Set("skfjnvoe34nk", testShortURL)
+				s.Create("skfjnvoe34nk", testShortURL)
 			},
 			wantStatus: http.StatusTemporaryRedirect,
 		},

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -43,13 +44,42 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortenID, err := service.GenerateUniqID(h.storage)
-	if err != nil {
-		log.Printf("ERROR: cannot generate shorten ID: %v", err)
+	var shortenID string
+	maxAttempts := 10
+	for i := 0; i < maxAttempts; i++ {
+		// trying to generate short ID
+		id, err := service.GenerateShortID()
+		if err != nil {
+			log.Printf("ERROR: cannot generate shorten ID: %v", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		// trying to save ID
+		err = h.storage.Create(id, originalURL)
+		if err == nil {
+			shortenID = id
+			// exit if success
+			break
+		}
+
+		// go next loop iteration if ID is already exist
+		if errors.Is(err, repository.ErrAlreadyExists) {
+			log.Printf("INFO: shorten ID collision detected in generation attempt %d (max %d): %v", i+1, maxAttempts, err)
+			continue
+		}
+
+		// raise unknown error just in case if break and continue fail before
+		log.Printf("ERROR: unknown storage error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	h.storage.Set(shortenID, originalURL)
+
+	if shortenID == "" {
+		log.Printf("ERROR: failed to generate unique ID after %d attempts", maxAttempts)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 
 	shortURL, err := url.JoinPath(h.baseURL, shortenID)
 	if err != nil {
