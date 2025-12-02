@@ -13,7 +13,7 @@ func generateShortID() (string, error) {
 	bytes := make([]byte, 6)
 	_, err := rand.Read(bytes)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate random string for short ID: %w", err)
 	}
 	return hex.EncodeToString(bytes), nil
 }
