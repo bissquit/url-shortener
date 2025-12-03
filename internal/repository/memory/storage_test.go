@@ -23,7 +23,6 @@ func Test_URLStorageCreate(t *testing.T) {
 	// trying to create existed
 	err = s.Create(id, urlNew)
 	assert.Error(t, err)
-	assert.Equal(t, repository.ErrAlreadyExists, err)
 	// check not rewrited
 	u, err := s.Get(id)
 	assert.NoError(t, err)

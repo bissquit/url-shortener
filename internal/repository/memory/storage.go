@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/bissquit/url-shortener/internal/repository"
@@ -26,7 +27,7 @@ func (s *URLStorage) Create(id, originalURL string) error {
 
 	_, ok := s.data[id]
 	if ok {
-		return repository.ErrAlreadyExists
+		return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, id)
 	}
 	s.data[id] = originalURL
 	return nil
