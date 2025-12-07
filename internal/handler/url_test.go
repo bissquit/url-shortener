@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -106,6 +107,32 @@ func Test_HandlersCreate(t *testing.T) {
 			}
 		})
 	}
+}
+
+type errorReader struct{}
+
+// implement dummy method to emulate io.Reader error
+func (errorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("dummy error")
+}
+
+func Test_HandlersCreateBodyError(t *testing.T) {
+	// initialize env
+	cfg := config.GetDefaultConfig()
+	storage := memory.NewURLStorage()
+	handlers := NewURLHandlers(storage, cfg.BaseURL)
+
+	r := httptest.NewRequest(http.MethodPost, "/", errorReader{})
+	r.Header.Set("Content-Type", "text/plain")
+
+	w := httptest.NewRecorder()
+
+	handlers.Create(w, r)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 }
 
 func Test_HandlersRedirect(t *testing.T) {
