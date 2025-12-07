@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/bissquit/url-shortener/internal/service"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/bissquit/url-shortener/internal/config"
@@ -12,16 +13,18 @@ import (
 )
 
 type Server struct {
-	config  *config.Config
-	storage repository.URLRepository
-	router  *chi.Mux
+	config    *config.Config
+	storage   repository.URLRepository
+	router    *chi.Mux
+	generator service.IDGenerator
 }
 
-func NewServer(config *config.Config, storage repository.URLRepository) *Server {
+func NewServer(config *config.Config, storage repository.URLRepository, generator service.IDGenerator) *Server {
 	s := &Server{
-		config:  config,
-		storage: storage,
-		router:  chi.NewRouter(),
+		config:    config,
+		storage:   storage,
+		router:    chi.NewRouter(),
+		generator: generator,
 	}
 
 	s.setupRoutes()
@@ -36,7 +39,7 @@ func (s *Server) setupRoutes() {
 		handler.BadRequest(w, "Method not allowed")
 	})
 
-	h := handler.NewURLHandlers(s.storage, s.config.BaseURL)
+	h := handler.NewURLHandlers(s.storage, s.config.BaseURL, s.generator)
 
 	s.router.Post("/", h.Create)
 	s.router.Get("/", h.Redirect)

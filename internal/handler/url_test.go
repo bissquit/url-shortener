@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
+	"github.com/bissquit/url-shortener/internal/service/crypto"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,7 +65,8 @@ func Test_HandlersCreate(t *testing.T) {
 	// initialize env
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
-	handlers := NewURLHandlers(storage, cfg.BaseURL)
+	gen := crypto.NewRandomGenerator()
+	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -120,7 +123,8 @@ func Test_HandlersCreateBodyError(t *testing.T) {
 	// initialize env
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
-	handlers := NewURLHandlers(storage, cfg.BaseURL)
+	gen := crypto.NewRandomGenerator()
+	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
 	r := httptest.NewRequest(http.MethodPost, "/", errorReader{})
 	r.Header.Set("Content-Type", "text/plain")
@@ -133,6 +137,35 @@ func Test_HandlersCreateBodyError(t *testing.T) {
 	defer res.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+}
+
+type DummyGenerator struct{}
+
+func NewDummyGenerator() *DummyGenerator {
+	return &DummyGenerator{}
+}
+
+// implement dummy method  to emulate short ID generation error
+func (g *DummyGenerator) GenerateShortID() (string, error) {
+	return "", fmt.Errorf("fake error: %w", errors.New("dummy error"))
+}
+
+func Test_HandlersCreateGeneratorError(t *testing.T) {
+	cfg := config.GetDefaultConfig()
+	storage := memory.NewURLStorage()
+	gen := NewDummyGenerator()
+
+	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
+
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com"))
+	r.Header.Set("Content-Type", "text/plain")
+
+	w := httptest.NewRecorder()
+	handlers.Create(w, r)
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 }
 
 func Test_HandlersRedirect(t *testing.T) {
@@ -195,10 +228,11 @@ func Test_HandlersRedirect(t *testing.T) {
 	// initialize env
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
+	gen := crypto.NewRandomGenerator()
 	// prepare test data
 	storage.Create("skfjnvoe34nk", testShortURL)
 	storage.Create("kjsdfbj4t9bb", testLongURL)
-	handlers := NewURLHandlers(storage, cfg.BaseURL)
+	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

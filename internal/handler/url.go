@@ -14,14 +14,16 @@ import (
 )
 
 type URLHandlers struct {
-	storage repository.URLRepository
-	baseURL string
+	storage   repository.URLRepository
+	baseURL   string
+	generator service.IDGenerator
 }
 
-func NewURLHandlers(storage repository.URLRepository, baseURL string) *URLHandlers {
+func NewURLHandlers(storage repository.URLRepository, baseURL string, generator service.IDGenerator) *URLHandlers {
 	return &URLHandlers{
-		storage: storage,
-		baseURL: baseURL,
+		storage:   storage,
+		baseURL:   baseURL,
+		generator: generator,
 	}
 }
 
@@ -48,7 +50,7 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	maxAttempts := 10
 	for i := 0; i < maxAttempts; i++ {
 		// trying to generate short ID
-		id, err := service.GenerateShortID()
+		id, err := h.generator.GenerateShortID()
 		if err != nil {
 			log.Printf("ERROR: cannot generate shorten ID: %v", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
