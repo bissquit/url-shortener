@@ -22,6 +22,10 @@ func NewURLStorage() repository.URLRepository {
 // Create saves a new URL with the given ID.
 // Returns ErrAlreadyExists if the ID already exists.
 func (s *URLStorage) Create(id, originalURL string) error {
+	if id == "" {
+		return fmt.Errorf("%w", repository.ErrEmptyID)
+	}
+
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
