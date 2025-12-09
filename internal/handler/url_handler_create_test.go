@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/bissquit/url-shortener/internal/config"
+	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 	"github.com/bissquit/url-shortener/internal/service/crypto"
 	"github.com/stretchr/testify/assert"
@@ -129,20 +131,106 @@ func Test_HandlersCreateBodyError(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 }
 
-func Test_HandlersCreateGeneratorError(t *testing.T) {
+//
+//
+//
+
+type DummyGenerator struct {
+	id  string
+	err error
+}
+
+func NewDummyGenerator() *DummyGenerator {
+	return &DummyGenerator{}
+}
+
+// implement dummy method  to emulate short ID generation error
+func (g *DummyGenerator) GenerateShortID() (string, error) {
+	var err error
+	if g.err != nil {
+		err = g.err
+	}
+	return g.id, err
+}
+
+func Test_HandlersCreateGeneratorErrors(t *testing.T) {
+	const (
+		testID  = "fixed-id"
+		testURL = "https://example.com"
+	)
+	tests := []struct {
+		name         string
+		generator    DummyGenerator
+		setupStorage func(repository.URLRepository)
+		wantStatus   int
+	}{
+		{
+			name: "happy path",
+			generator: DummyGenerator{
+				id:  "uniqID",
+				err: nil,
+			},
+			setupStorage: func(s repository.URLRepository) {},
+			wantStatus:   http.StatusCreated,
+		},
+		{
+			name: "unknown generator error",
+			generator: DummyGenerator{
+				id:  "",
+				err: fmt.Errorf("dummy error"),
+			},
+			setupStorage: func(s repository.URLRepository) {},
+			wantStatus:   http.StatusInternalServerError,
+		},
+		{
+			name: "generator returns same id each time",
+			generator: DummyGenerator{
+				id:  testID,
+				err: nil,
+			},
+			setupStorage: func(s repository.URLRepository) {
+				s.Create(testID, testURL)
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "generator returns empty string id",
+			generator: DummyGenerator{
+				id:  "",
+				err: nil,
+			},
+			setupStorage: func(s repository.URLRepository) {},
+			wantStatus:   http.StatusInternalServerError,
+		},
+	}
+
+	// we may run tests in parallel because we don't depend on global state
+	t.Parallel()
+
 	cfg := config.GetDefaultConfig()
-	storage := memory.NewURLStorage()
-	gen := NewDummyGenerator()
 
-	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// configure storage for each test because we need full isolation
+			storage := memory.NewURLStorage()
+			tt.setupStorage(storage)
 
-	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com"))
-	r.Header.Set("Content-Type", "text/plain")
+			// create generator with predefined id and error
+			gen := NewDummyGenerator()
+			gen.id = tt.generator.id
+			gen.err = tt.generator.err
 
-	w := httptest.NewRecorder()
-	handlers.Create(w, r)
-	res := w.Result()
-	defer res.Body.Close()
+			handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
-	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
+			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testURL))
+			r.Header.Set("Content-Type", "text/plain")
+
+			w := httptest.NewRecorder()
+			handlers.Create(w, r)
+			res := w.Result()
+			defer res.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, res.StatusCode)
+		})
+	}
 }
