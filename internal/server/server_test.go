@@ -10,14 +10,16 @@ import (
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
+	"github.com/bissquit/url-shortener/internal/service/crypto"
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_NewServer(t *testing.T) {
 	cfg := config.GetConfig()
 	storage := memory.NewURLStorage()
+	gen := crypto.NewRandomGenerator()
 
-	srv := NewServer(cfg, storage)
+	srv := NewServer(cfg, storage, gen)
 
 	// server is created
 	assert.NotNil(t, srv)
@@ -64,13 +66,14 @@ func Test_ServerRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := memory.NewURLStorage()
 			cfg := config.GetDefaultConfig()
+			gen := crypto.NewRandomGenerator()
 
 			// configure storage if required
 			if tt.setupStorage != nil {
 				tt.setupStorage(storage)
 			}
 
-			srv := NewServer(cfg, storage)
+			srv := NewServer(cfg, storage, gen)
 
 			// configure body
 			var bodyReader io.Reader
