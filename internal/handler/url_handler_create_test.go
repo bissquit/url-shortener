@@ -131,28 +131,6 @@ func Test_HandlersCreateBodyError(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 }
 
-//
-//
-//
-
-type DummyGenerator struct {
-	id  string
-	err error
-}
-
-func NewDummyGenerator() *DummyGenerator {
-	return &DummyGenerator{}
-}
-
-// implement dummy method  to emulate short ID generation error
-func (g *DummyGenerator) GenerateShortID() (string, error) {
-	var err error
-	if g.err != nil {
-		err = g.err
-	}
-	return g.id, err
-}
-
 func Test_HandlersCreateGeneratorErrors(t *testing.T) {
 	const (
 		testID  = "fixed-id"
