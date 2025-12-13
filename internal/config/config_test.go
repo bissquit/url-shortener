@@ -60,30 +60,19 @@ func Test_Config(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// save original values
-			oldArgs := os.Args
-			oldEnvs := make(map[string]string)
-			for k := range tt.envs {
-				oldEnvs[k] = os.Getenv(k)
-			}
-			// restore original values
-			defer func() {
-				os.Args = oldArgs
-				for k, v := range oldEnvs {
-					os.Setenv(k, v)
-				}
-			}()
+			oldArgs := os.Args                   // save original values
+			defer func() { os.Args = oldArgs }() // restore original values
 
 			os.Args = tt.args // set args
 			for k, v := range tt.envs {
-				os.Setenv(k, v) // set envs
+				t.Setenv(k, v)
 			}
 
 			resetFlagForTesting()
-			k := GetConfig()
+			cfg := GetConfig()
 
-			assert.Equal(t, tt.want.ServerAddr, k.ServerAddr)
-			assert.Equal(t, tt.want.BaseURL, k.BaseURL)
+			assert.Equal(t, tt.want.ServerAddr, cfg.ServerAddr)
+			assert.Equal(t, tt.want.BaseURL, cfg.BaseURL)
 		})
 	}
 }
