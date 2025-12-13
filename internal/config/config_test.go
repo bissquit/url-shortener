@@ -21,7 +21,7 @@ func Test_Config(t *testing.T) {
 		want Config
 	}{
 		{
-			name: "empty args and envs",
+			name: "empty args, empty envs",
 			args: []string{"cmd"},
 			envs: map[string]string{},
 			want: Config{
@@ -51,6 +51,15 @@ func Test_Config(t *testing.T) {
 			want: Config{
 				ServerAddr: "localhost:1085",
 				BaseURL:    "http://127.0.0.1:1085",
+			},
+		},
+		{
+			name: "set args, empty envs",
+			args: []string{"cmd", "-a", ":443", "-b", "https://localhost:443"},
+			envs: map[string]string{},
+			want: Config{
+				ServerAddr: ":443",
+				BaseURL:    "https://localhost:443",
 			},
 		},
 	}
