@@ -23,10 +23,7 @@ func Test_Config(t *testing.T) {
 		{
 			name: "empty args and envs",
 			args: []string{"cmd"},
-			envs: map[string]string{
-				"SERVER_ADDRESS": "",
-				"BASE_URL":       "",
-			},
+			envs: map[string]string{},
 			want: Config{
 				ServerAddr: ":8080",
 				BaseURL:    "http://localhost:8080",
