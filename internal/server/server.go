@@ -45,6 +45,7 @@ func (s *Server) setupRoutes() {
 	h := handler.NewURLHandlers(s.storage, s.config.BaseURL, s.generator)
 
 	s.router.Post("/", h.Create)
+	s.router.Post("/api/shorten", h.CreateJSON)
 	s.router.Get("/", h.Redirect)
 	s.router.Get("/{id}", h.Redirect)
 }
