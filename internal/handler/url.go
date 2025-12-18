@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 
@@ -91,7 +92,14 @@ func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, int) 
 }
 
 func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Content-Type") != "application/json" {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	defer r.Body.Close()
+	if err != nil {
+		BadRequest(w, "wrong Content-Type")
+		return
+	}
+
+	if mediaType != "application/json" {
 		BadRequest(w, "Content-Type not application/json")
 		return
 	}
@@ -102,7 +110,6 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		BadRequest(w, "Cannot read request body")
 		return
 	}
-	defer r.Body.Close()
 
 	if body.URL == "" {
 		BadRequest(w, "Empty URL value in request body")
@@ -115,9 +122,25 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// prepare response payload separate from HTTP writing
+	payload := responseURL{Result: shortURL}
+	// convert the payload to JSON bytes before sending any headers/status
+	b, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("ERROR: cannot marshal response payload: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	// start HTTP response only after JSON is ready
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(responseURL{Result: shortURL})
+	if _, err := w.Write(b); err != nil {
+		// if writing body fails, status code is already sent, so we can only log the error
+		// it doesn't make sense to send 5xx status after status is set and already sent above
+		log.Printf("ERROR: cannot write response body: %v", err)
+		return
+	}
 }
 
 func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
