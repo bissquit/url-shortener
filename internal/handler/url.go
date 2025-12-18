@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"mime"
@@ -37,21 +38,29 @@ type responseURL struct {
 	Result string `json:"result"`
 }
 
-func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, int) {
-	if _, err := url.ParseRequestURI(originalURL); err != nil {
-		log.Printf("%s: %s", http.StatusText(http.StatusBadRequest), "Invalid URL")
-		return "", http.StatusBadRequest
+func validateURL(u string) error {
+	if u == "" {
+		return errors.New("empty URL value in request body")
 	}
 
+	if _, err := url.ParseRequestURI(u); err != nil {
+		return errors.New("invalid URL")
+	}
+	return nil
+}
+
+var (
+	ErrIDGenerationExhausted = errors.New("id generation exhausted")
+)
+
+func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, error) {
 	var shortenID string
 	maxAttempts := 10
 	for i := 0; i < maxAttempts; i++ {
 		// trying to generate short ID
 		id, err := h.generator.GenerateShortID()
 		if err != nil {
-			log.Printf("ERROR: cannot generate shorten ID: %v", err)
-			//http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return "", http.StatusInternalServerError
+			return "", fmt.Errorf("cannot generate shorten ID: %w", err)
 		}
 
 		// trying to save ID
@@ -68,27 +77,19 @@ func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, int) 
 			continue
 		}
 
-		// raise unknown error just in case if break and continue fail before
-		log.Printf("ERROR: unknown storage error: %v", err)
-		//http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return "", http.StatusInternalServerError
+		return "", fmt.Errorf("unknown storage error: %w", err)
 	}
 
 	if shortenID == "" {
-		log.Printf("ERROR: failed to generate unique ID after %d attempts", maxAttempts)
-		//http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return "", http.StatusInternalServerError
+		return "", fmt.Errorf("%w: attempts=%d", ErrIDGenerationExhausted, maxAttempts)
 	}
 
 	shortURL, err := url.JoinPath(h.baseURL, shortenID)
 	if err != nil {
-		log.Printf("ERROR: cannot return shorten URL (baseURL=%q, id=%q): %v",
-			h.baseURL, shortenID, err)
-		//http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return "", http.StatusInternalServerError
+		return "", fmt.Errorf("cannot return shorten URL (baseURL=%q, id=%q): %w", h.baseURL, shortenID, err)
 	}
 
-	return shortURL, 0
+	return shortURL, nil
 }
 
 func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +101,7 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if mediaType != "application/json" {
-		BadRequest(w, "Content-Type not application/json")
+		BadRequest(w, "Content-Type must be application/json")
 		return
 	}
 
@@ -111,14 +112,15 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.URL == "" {
-		BadRequest(w, "Empty URL value in request body")
+	if err := validateURL(body.URL); err != nil {
+		BadRequest(w, err.Error())
 		return
 	}
 
-	shortURL, code := generateAndStoreShortURL(body.URL, h)
-	if code != 0 {
-		http.Error(w, http.StatusText(code), code)
+	shortURL, err := generateAndStoreShortURL(body.URL, h)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -144,7 +146,14 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Content-Type") != "text/plain" {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	defer r.Body.Close()
+	if err != nil {
+		BadRequest(w, "wrong Content-Type")
+		return
+	}
+
+	if mediaType != "text/plain" {
 		BadRequest(w, "Content-Type must be text/plain")
 		return
 	}
@@ -156,9 +165,15 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, code := generateAndStoreShortURL(string(body), h)
-	if code != 0 {
-		http.Error(w, http.StatusText(code), code)
+	if err := validateURL(string(body)); err != nil {
+		BadRequest(w, err.Error())
+		return
+	}
+
+	shortURL, err := generateAndStoreShortURL(string(body), h)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -195,5 +210,5 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 
 func BadRequest(w http.ResponseWriter, message string) {
 	log.Printf("bad request: %s", message)
-	http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+	http.Error(w, message, http.StatusBadRequest)
 }
