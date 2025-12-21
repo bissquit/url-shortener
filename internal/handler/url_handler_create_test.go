@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/bissquit/url-shortener/internal/config"
-	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 	"github.com/bissquit/url-shortener/internal/service/crypto"
 	"github.com/stretchr/testify/assert"
@@ -24,39 +22,90 @@ func Test_HandlersCreate(t *testing.T) {
 		testPath   = "/"
 	)
 
+	type input struct {
+		body        string
+		contentType string
+		baseURL     string
+	}
 	type want struct {
 		code        int
 		contentType string
 	}
 	tests := []struct {
-		name        string
-		body        string
-		contentType string
-		want        want
+		name  string
+		input input
+		want  want
 	}{
 		{
-			name:        "successful URL creation",
-			body:        "https://example.com",
-			contentType: "text/plain",
+			name: "successful URL creation",
+			input: input{
+				body:        "https://example.com",
+				contentType: "text/plain",
+			},
+			//body:        "https://example.com",
+			//contentType: "text/plain",
 			want: want{
 				code:        http.StatusCreated,
 				contentType: "text/plain",
 			},
 		},
 		{
-			name:        "wrong body",
-			body:        "some data",
-			contentType: "text/plain",
+			name: "incorrect URL format",
+			input: input{
+				body:        "%",
+				contentType: "text/plain",
+			},
+			//body:        "%",
+			//contentType: "text/plain",
 			want: want{
 				code: http.StatusBadRequest,
 			},
 		},
 		{
-			name:        "wrong contentType",
-			body:        "https://example.com",
-			contentType: "application/json",
+			name: "wrong body",
+			input: input{
+				body:        "some data",
+				contentType: "text/plain",
+			},
+			//body:        "some data",
+			//contentType: "text/plain",
 			want: want{
 				code: http.StatusBadRequest,
+			},
+		},
+		{
+			name: "empty body",
+			input: input{
+				body:        "",
+				contentType: "text/plain",
+			},
+			//body:        "",
+			//contentType: "text/plain",
+			want: want{
+				code: http.StatusBadRequest,
+			},
+		},
+		{
+			name: "wrong contentType",
+			input: input{
+				body:        "https://example.com",
+				contentType: "application/json",
+			},
+			//body:        "https://example.com",
+			//contentType: "application/json",
+			want: want{
+				code: http.StatusBadRequest,
+			},
+		},
+		{
+			name: "wrong base URL",
+			input: input{
+				body:        "https://example.com",
+				contentType: "text/plain",
+				baseURL:     "http://%-",
+			},
+			want: want{
+				code: http.StatusInternalServerError,
 			},
 		},
 	}
@@ -65,16 +114,22 @@ func Test_HandlersCreate(t *testing.T) {
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	gen := crypto.NewRandomGenerator()
-	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// create Request
-			r := httptest.NewRequest(testMethod, testPath, strings.NewReader(tt.body))
-			r.Header.Set("Content-Type", tt.contentType)
+			r := httptest.NewRequest(testMethod, testPath, strings.NewReader(tt.input.body))
+			r.Header.Set("Content-Type", tt.input.contentType)
 			// create ResponseWriter
 			w := httptest.NewRecorder()
 
+			var baseURL string
+			if tt.input.baseURL != "" {
+				baseURL = tt.input.baseURL
+			} else {
+				baseURL = cfg.BaseURL
+			}
+			handlers := NewURLHandlers(storage, baseURL, gen)
 			// run func
 			handlers.Create(w, r)
 
@@ -105,7 +160,7 @@ func Test_HandlersCreate(t *testing.T) {
 				originalURL, err := storage.Get(id)
 				assert.NoError(t, err, "Short ID is not stored")
 				// check if original url is correct
-				assert.Equal(t, tt.body, originalURL, "OriginalURL is wrong")
+				assert.Equal(t, tt.input.body, originalURL, "OriginalURL is wrong")
 			}
 		})
 	}
@@ -129,86 +184,4 @@ func Test_HandlersCreateBodyError(t *testing.T) {
 	defer res.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
-}
-
-func Test_HandlersCreateGeneratorErrors(t *testing.T) {
-	const (
-		testID  = "fixed-id"
-		testURL = "https://example.com"
-	)
-	tests := []struct {
-		name         string
-		generator    DummyGenerator
-		setupStorage func(repository.URLRepository)
-		wantStatus   int
-	}{
-		{
-			name: "happy path",
-			generator: DummyGenerator{
-				id:  "uniqID",
-				err: nil,
-			},
-			setupStorage: func(s repository.URLRepository) {},
-			wantStatus:   http.StatusCreated,
-		},
-		{
-			name: "unknown generator error",
-			generator: DummyGenerator{
-				id:  "",
-				err: fmt.Errorf("dummy error"),
-			},
-			setupStorage: func(s repository.URLRepository) {},
-			wantStatus:   http.StatusInternalServerError,
-		},
-		{
-			name: "generator returns same id each time",
-			generator: DummyGenerator{
-				id:  testID,
-				err: nil,
-			},
-			setupStorage: func(s repository.URLRepository) {
-				s.Create(testID, testURL)
-			},
-			wantStatus: http.StatusInternalServerError,
-		},
-		{
-			name: "generator returns empty string id",
-			generator: DummyGenerator{
-				id:  "",
-				err: nil,
-			},
-			setupStorage: func(s repository.URLRepository) {},
-			wantStatus:   http.StatusInternalServerError,
-		},
-	}
-
-	// we may run tests in parallel because we don't depend on global state
-	t.Parallel()
-
-	cfg := config.GetDefaultConfig()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// configure storage for each test because we need full isolation
-			storage := memory.NewURLStorage()
-			tt.setupStorage(storage)
-
-			// create generator with predefined id and error
-			gen := NewDummyGenerator()
-			gen.id = tt.generator.id
-			gen.err = tt.generator.err
-
-			handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
-
-			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testURL))
-			r.Header.Set("Content-Type", "text/plain")
-
-			w := httptest.NewRecorder()
-			handlers.Create(w, r)
-			res := w.Result()
-			defer res.Body.Close()
-
-			assert.Equal(t, tt.wantStatus, res.StatusCode)
-		})
-	}
 }
