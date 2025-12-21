@@ -159,7 +159,6 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
 	if err != nil {
 		BadRequest(w, "Cannot read request body")
 		return

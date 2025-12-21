@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,17 +17,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_HandlersCreate(t *testing.T) {
+func Test_HandlersCreateJSON(t *testing.T) {
 	// we should test only POST with "/" path because of Run() routing
 	const (
 		testMethod = http.MethodPost
-		testPath   = "/"
+		testPath   = "/api/shorten"
 	)
 
 	type input struct {
-		body        string
-		contentType string
-		baseURL     string
+		body                 string
+		emulateIncorrectJSON bool
+		contentType          string
+		baseURL              string
 	}
 	type want struct {
 		code        int
@@ -39,19 +42,21 @@ func Test_HandlersCreate(t *testing.T) {
 		{
 			name: "successful URL creation",
 			input: input{
-				body:        "https://example.com",
-				contentType: "text/plain",
+				body:                 "https://example.com",
+				emulateIncorrectJSON: false,
+				contentType:          "application/json",
 			},
 			want: want{
 				code:        http.StatusCreated,
-				contentType: "text/plain",
+				contentType: "application/json",
 			},
 		},
 		{
-			name: "incorrect URL format",
+			name: "invalid URL value",
 			input: input{
-				body:        "%",
-				contentType: "text/plain",
+				body:                 "%",
+				emulateIncorrectJSON: false,
+				contentType:          "application/json",
 			},
 			want: want{
 				code: http.StatusBadRequest,
@@ -60,8 +65,9 @@ func Test_HandlersCreate(t *testing.T) {
 		{
 			name: "wrong body",
 			input: input{
-				body:        "some data",
-				contentType: "text/plain",
+				body:                 "some data",
+				emulateIncorrectJSON: true,
+				contentType:          "application/json",
 			},
 			want: want{
 				code: http.StatusBadRequest,
@@ -70,8 +76,20 @@ func Test_HandlersCreate(t *testing.T) {
 		{
 			name: "empty body",
 			input: input{
-				body:        "",
-				contentType: "text/plain",
+				body:                 "",
+				emulateIncorrectJSON: true,
+				contentType:          "application/json",
+			},
+			want: want{
+				code: http.StatusBadRequest,
+			},
+		},
+		{
+			name: "empty url field",
+			input: input{
+				body:                 "",
+				emulateIncorrectJSON: false,
+				contentType:          "application/json",
 			},
 			want: want{
 				code: http.StatusBadRequest,
@@ -80,8 +98,9 @@ func Test_HandlersCreate(t *testing.T) {
 		{
 			name: "wrong contentType",
 			input: input{
-				body:        "https://example.com",
-				contentType: "application/json",
+				body:                 "https://example.com",
+				emulateIncorrectJSON: true,
+				contentType:          "text/plain",
 			},
 			want: want{
 				code: http.StatusBadRequest,
@@ -90,9 +109,10 @@ func Test_HandlersCreate(t *testing.T) {
 		{
 			name: "wrong base URL",
 			input: input{
-				body:        "https://example.com",
-				contentType: "text/plain",
-				baseURL:     "http://%-",
+				body:                 "https://example.com",
+				emulateIncorrectJSON: false,
+				contentType:          "application/json",
+				baseURL:              "http://%-",
 			},
 			want: want{
 				code: http.StatusInternalServerError,
@@ -109,8 +129,20 @@ func Test_HandlersCreate(t *testing.T) {
 			// configure storage for each test just for isolation
 			storage := memory.NewURLStorage()
 
-			// create Request
-			r := httptest.NewRequest(testMethod, testPath, strings.NewReader(tt.input.body))
+			var body io.Reader
+			if tt.input.emulateIncorrectJSON {
+				// raw body: intentionally broken JSON or empty string, send as-is
+				body = strings.NewReader(tt.input.body)
+			} else {
+				// valid JSON body
+				req := requestURL{URL: tt.input.body}
+				b, err := json.Marshal(req)
+				require.NoError(t, err)
+				body = bytes.NewReader(b)
+			}
+
+			// create Request (including body type)
+			r := httptest.NewRequest(testMethod, testPath, body)
 			r.Header.Set("Content-Type", tt.input.contentType)
 			// create ResponseWriter
 			w := httptest.NewRecorder()
@@ -122,7 +154,7 @@ func Test_HandlersCreate(t *testing.T) {
 				baseURL = cfg.BaseURL
 			}
 			handlers := NewURLHandlers(storage, baseURL, gen)
-			handlers.Create(w, r)
+			handlers.CreateJSON(w, r)
 
 			res := w.Result()
 			defer res.Body.Close()
@@ -136,19 +168,23 @@ func Test_HandlersCreate(t *testing.T) {
 				// check response structure
 				assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
 
+				// retrieve JSON
+				var resBodyJSON responseURL
+				err = json.Unmarshal(resBody, &resBodyJSON)
+				require.NoError(t, err)
+
 				// check if there is a valid url in the body
-				responseURL := strings.TrimSpace(string(resBody))
-				require.NotEmpty(t, responseURL)
-				_, err := url.ParseRequestURI(responseURL)
+				_, err := url.ParseRequestURI(resBodyJSON.Result)
 				assert.NoError(t, err,
 					"Response should be a valid URL")
 
 				// check correct url
-				assert.True(t, strings.HasPrefix(responseURL, baseURL),
+				assert.True(t, strings.HasPrefix(resBodyJSON.Result, baseURL),
 					"Response should start with baseURL")
 
 				// check if id was stored
-				id := strings.TrimPrefix(responseURL, baseURL+"/")
+				id := strings.TrimPrefix(resBodyJSON.Result, baseURL+"/")
+
 				originalURL, err := storage.Get(id)
 				assert.NoError(t, err, "Short ID is not stored")
 				// check if original url is correct
@@ -158,19 +194,19 @@ func Test_HandlersCreate(t *testing.T) {
 	}
 }
 
-func Test_HandlersCreateBodyError(t *testing.T) {
+func Test_HandlersCreateJSON_BodyError(t *testing.T) {
 	// initialize env
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	gen := crypto.NewRandomGenerator()
 	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
-	r := httptest.NewRequest(http.MethodPost, "/", errorReader{})
-	r.Header.Set("Content-Type", "text/plain")
+	r := httptest.NewRequest(http.MethodPost, "/api/shorten", errorReader{})
+	r.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
 
-	handlers.Create(w, r)
+	handlers.CreateJSON(w, r)
 
 	res := w.Result()
 	defer res.Body.Close()
