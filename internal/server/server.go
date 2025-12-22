@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/bissquit/url-shortener/internal/compress"
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/handler"
 	"github.com/bissquit/url-shortener/internal/logging"
@@ -33,6 +34,7 @@ func NewServer(config *config.Config, storage repository.URLRepository, generato
 
 func (s *Server) setupRoutes() {
 	// add logging middleware to all routes
+	s.router.Use(compress.GzipResponse)
 	s.router.Use(logging.WithLogging)
 
 	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
