@@ -10,7 +10,7 @@ import (
 
 func resetFlagForTesting() {
 	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
-	flag.CommandLine.Usage = nil // Убираем стандартный Usage
+	flag.CommandLine.Usage = nil // remove standard Usage
 }
 
 func Test_Config(t *testing.T) {

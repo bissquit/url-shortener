@@ -195,12 +195,12 @@ func Test_HandlersCreateJSON(t *testing.T) {
 }
 
 func Test_HandlersCreateJSON_BodyError(t *testing.T) {
-	// initialize env
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	gen := crypto.NewRandomGenerator()
 	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
+	// replace io.Reader to emulate body error
 	r := httptest.NewRequest(http.MethodPost, "/api/shorten", errorReader{})
 	r.Header.Set("Content-Type", "application/json")
 

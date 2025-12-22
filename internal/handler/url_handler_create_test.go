@@ -159,12 +159,12 @@ func Test_HandlersCreate(t *testing.T) {
 }
 
 func Test_HandlersCreateBodyError(t *testing.T) {
-	// initialize env
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	gen := crypto.NewRandomGenerator()
 	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
+	// replace io.Reader to emulate body error
 	r := httptest.NewRequest(http.MethodPost, "/", errorReader{})
 	r.Header.Set("Content-Type", "text/plain")
 
