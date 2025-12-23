@@ -34,8 +34,8 @@ func (g *gzipWriter) Write(b []byte) (int, error) {
 }
 
 func (g *gzipWriter) WriteHeader(statusCode int) {
-	// headers should be set before calling WriteHeader()
-	// when it's not, http will set httpOk
+	// headers should be set before calling WriteHeader() in handlers
+	// when it's not, net/http will set httpOk by default
 	if g.Header().Get("Content-Type") == "" {
 		log.Println("gzip: missing Content-Type")
 		g.compress = false
@@ -57,6 +57,11 @@ func (g *gzipWriter) WriteHeader(statusCode int) {
 	g.ResponseWriter.WriteHeader(statusCode)
 }
 
+// ResponseWriter doesn't have Close() method (https://pkg.go.dev/net/http#ResponseWriter)
+// but we should close gzip.Writer (https://pkg.go.dev/compress/gzip#Writer.Close)
+//
+// Close() closes the Writer by flushing any unwritten data to the underlying io.Writer
+// and writing the GZIP footer. It does not close the underlying io.Writer.
 func (g *gzipWriter) Close() error {
 	if g.compress {
 		return g.gw.Close()
