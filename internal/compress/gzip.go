@@ -2,6 +2,7 @@ package compress
 
 import (
 	"compress/gzip"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -71,6 +72,7 @@ func (g *gzipWriter) Close() error {
 func GzipResponse(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		encoding := strings.ToLower(r.Header.Get("Accept-Encoding"))
+		// TODO: implement split parsing
 		if !strings.Contains(encoding, "gzip") {
 			h.ServeHTTP(w, r)
 			return
@@ -79,5 +81,72 @@ func GzipResponse(h http.Handler) http.Handler {
 		cw := newGzipWriter(w)
 		defer cw.Close()
 		h.ServeHTTP(&cw, r)
+	})
+}
+
+type gzipReader struct {
+	body io.ReadCloser
+	zr   *gzip.Reader
+}
+
+func newGzipReader(body io.ReadCloser) (*gzipReader, error) {
+	zr, err := gzip.NewReader(body)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gzipReader{
+		body: body,
+		zr:   zr,
+	}, nil
+}
+
+func (g *gzipReader) Read(b []byte) (int, error) {
+	return g.zr.Read(b)
+}
+
+func (g *gzipReader) Close() error {
+	// gzip.Reader.Close() does not close the underlying reader
+	// so we should close both
+	err1 := g.zr.Close()
+	err2 := g.body.Close()
+	if err1 != nil {
+		return err1
+	}
+	return err2
+}
+
+func GzipRequest(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		encoding := strings.ToLower(r.Header.Get("Content-Encoding"))
+		useGzip := strings.Contains(encoding, "gzip")
+
+		// Content-Encoding is not empty bot doesn't contain gzip format
+		if !useGzip && encoding != "" {
+			log.Printf("gzip: unsupported Content-Encoding: %q", encoding)
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+		// TODO: implement split parsing
+		if !useGzip {
+			h.ServeHTTP(w, r)
+			return
+		}
+
+		cr, err := newGzipReader(r.Body)
+		if err != nil {
+			log.Printf("gzip: invalid request body: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		// defer should be only after 'if err...' because in case of error
+		// cr returns nill, so defer will call nil pointer
+		defer cr.Close()
+
+		r.Body = cr
+		r.Header.Del("Content-Length")
+		r.Header.Del("Content-Encoding")
+
+		h.ServeHTTP(w, r)
 	})
 }

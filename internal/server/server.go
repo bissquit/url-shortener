@@ -34,6 +34,7 @@ func NewServer(config *config.Config, storage repository.URLRepository, generato
 
 func (s *Server) setupRoutes() {
 	// add logging middleware to all routes
+	s.router.Use(compress.GzipRequest)
 	s.router.Use(compress.GzipResponse)
 	s.router.Use(logging.WithLogging)
 
