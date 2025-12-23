@@ -34,11 +34,12 @@ func (g *gzipWriter) Write(b []byte) (int, error) {
 }
 
 func (g *gzipWriter) WriteHeader(statusCode int) {
+	g.compress = false
 	// headers should be set before calling WriteHeader() in handlers
 	// when it's not, net/http will set httpOk by default
 	if g.Header().Get("Content-Type") == "" {
 		log.Println("gzip: missing Content-Type")
-		g.compress = false
+		g.ResponseWriter.WriteHeader(statusCode)
 		return
 	}
 
@@ -50,8 +51,6 @@ func (g *gzipWriter) WriteHeader(statusCode int) {
 		g.compress = true
 		g.Header().Set("Content-Encoding", "gzip")
 		g.Header().Del("Content-Length")
-	} else {
-		g.compress = false
 	}
 
 	g.ResponseWriter.WriteHeader(statusCode)
