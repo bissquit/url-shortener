@@ -24,3 +24,4 @@ vendor/
 
 # custom
 coverage.html
+storage.json
