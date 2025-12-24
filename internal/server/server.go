@@ -4,24 +4,28 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
+	"github.com/bissquit/url-shortener/internal/compress"
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/handler"
+	"github.com/bissquit/url-shortener/internal/logging"
 	"github.com/bissquit/url-shortener/internal/repository"
+	"github.com/bissquit/url-shortener/internal/service"
+	"github.com/go-chi/chi/v5"
 )
 
 type Server struct {
-	config  *config.Config
-	storage repository.URLRepository
-	router  *chi.Mux
+	config    *config.Config
+	storage   repository.URLRepository
+	router    *chi.Mux
+	generator service.IDGenerator
 }
 
-func NewServer(config *config.Config, storage repository.URLRepository) *Server {
+func NewServer(config *config.Config, storage repository.URLRepository, generator service.IDGenerator) *Server {
 	s := &Server{
-		config:  config,
-		storage: storage,
-		router:  chi.NewRouter(),
+		config:    config,
+		storage:   storage,
+		router:    chi.NewRouter(),
+		generator: generator,
 	}
 
 	s.setupRoutes()
@@ -29,6 +33,11 @@ func NewServer(config *config.Config, storage repository.URLRepository) *Server 
 }
 
 func (s *Server) setupRoutes() {
+	// add logging middleware to all routes
+	s.router.Use(compress.GzipRequest)
+	s.router.Use(compress.GzipResponse)
+	s.router.Use(logging.WithLogging)
+
 	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		handler.BadRequest(w, "Not found")
 	})
@@ -36,9 +45,10 @@ func (s *Server) setupRoutes() {
 		handler.BadRequest(w, "Method not allowed")
 	})
 
-	h := handler.NewURLHandlers(s.storage, s.config.BaseURL)
+	h := handler.NewURLHandlers(s.storage, s.config.BaseURL, s.generator)
 
 	s.router.Post("/", h.Create)
+	s.router.Post("/api/shorten", h.CreateJSON)
 	s.router.Get("/", h.Redirect)
 	s.router.Get("/{id}", h.Redirect)
 }

@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 
@@ -14,45 +17,50 @@ import (
 )
 
 type URLHandlers struct {
-	storage repository.URLRepository
-	baseURL string
+	storage   repository.URLRepository
+	baseURL   string
+	generator service.IDGenerator
 }
 
-func NewURLHandlers(storage repository.URLRepository, baseURL string) *URLHandlers {
+func NewURLHandlers(storage repository.URLRepository, baseURL string, generator service.IDGenerator) *URLHandlers {
 	return &URLHandlers{
-		storage: storage,
-		baseURL: baseURL,
+		storage:   storage,
+		baseURL:   baseURL,
+		generator: generator,
 	}
 }
 
-func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Content-Type") != "text/plain" {
-		BadRequest(w, "Content-Type must be text/plain")
-		return
+type requestURL struct {
+	URL string `json:"url"`
+}
+
+type responseURL struct {
+	Result string `json:"result"`
+}
+
+func validateURL(u string) error {
+	if u == "" {
+		return errors.New("empty URL value in request body")
 	}
 
-	body, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		BadRequest(w, "Cannot read request body")
-		return
+	if _, err := url.ParseRequestURI(u); err != nil {
+		return errors.New("invalid URL")
 	}
+	return nil
+}
 
-	originalURL := string(body)
-	if _, err := url.ParseRequestURI(originalURL); err != nil {
-		BadRequest(w, "Invalid URL")
-		return
-	}
+var (
+	ErrIDGenerationExhausted = errors.New("id generation exhausted")
+)
 
+func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, error) {
 	var shortenID string
 	maxAttempts := 10
 	for i := 0; i < maxAttempts; i++ {
 		// trying to generate short ID
-		id, err := service.GenerateShortID()
+		id, err := h.generator.GenerateShortID()
 		if err != nil {
-			log.Printf("ERROR: cannot generate shorten ID: %v", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
+			return "", fmt.Errorf("cannot generate shorten ID: %w", err)
 		}
 
 		// trying to save ID
@@ -69,22 +77,101 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// raise unknown error just in case if break and continue fail before
-		log.Printf("ERROR: unknown storage error: %v", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		return "", fmt.Errorf("unknown storage error: %w", err)
 	}
 
 	if shortenID == "" {
-		log.Printf("ERROR: failed to generate unique ID after %d attempts", maxAttempts)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		return "", fmt.Errorf("%w: attempts=%d", ErrIDGenerationExhausted, maxAttempts)
 	}
 
 	shortURL, err := url.JoinPath(h.baseURL, shortenID)
 	if err != nil {
-		log.Printf("ERROR: cannot return shorten URL (baseURL=%q, id=%q): %v",
-			h.baseURL, shortenID, err)
+		return "", fmt.Errorf("cannot return shorten URL (baseURL=%q, id=%q): %w", h.baseURL, shortenID, err)
+	}
+
+	return shortURL, nil
+}
+
+func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	defer r.Body.Close()
+	if err != nil {
+		BadRequest(w, "wrong Content-Type")
+		return
+	}
+
+	if mediaType != "application/json" {
+		BadRequest(w, "Content-Type must be application/json")
+		return
+	}
+
+	var body requestURL
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		BadRequest(w, "Cannot read request body")
+		return
+	}
+
+	if err := validateURL(body.URL); err != nil {
+		BadRequest(w, err.Error())
+		return
+	}
+
+	shortURL, err := generateAndStoreShortURL(body.URL, h)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	// prepare response payload separate from HTTP writing
+	payload := responseURL{Result: shortURL}
+	// convert the payload to JSON bytes before sending any headers/status
+	b, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("ERROR: cannot marshal response payload: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	// start HTTP response only after JSON is ready
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if _, err := w.Write(b); err != nil {
+		// if writing body fails, status code is already sent, so we can only log the error
+		// it doesn't make sense to send 5xx status after status is set and already sent above
+		log.Printf("ERROR: cannot write response body: %v", err)
+		return
+	}
+}
+
+func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	defer r.Body.Close()
+	if err != nil {
+		BadRequest(w, "wrong Content-Type")
+		return
+	}
+
+	if mediaType != "text/plain" {
+		BadRequest(w, "Content-Type must be text/plain")
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		BadRequest(w, "Cannot read request body")
+		return
+	}
+
+	if err := validateURL(string(body)); err != nil {
+		BadRequest(w, err.Error())
+		return
+	}
+
+	shortURL, err := generateAndStoreShortURL(string(body), h)
+	if err != nil {
+		log.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -122,5 +209,5 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 
 func BadRequest(w http.ResponseWriter, message string) {
 	log.Printf("bad request: %s", message)
-	http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+	http.Error(w, message, http.StatusBadRequest)
 }
