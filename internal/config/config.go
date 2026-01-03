@@ -9,6 +9,7 @@ type Config struct {
 	ServerAddr      string
 	BaseURL         string
 	FileStoragePath string
+	DSN             string
 }
 
 func GetDefaultConfig() *Config {
@@ -16,6 +17,7 @@ func GetDefaultConfig() *Config {
 		ServerAddr:      ":8080",
 		BaseURL:         "http://localhost:8080",
 		FileStoragePath: "./storage.json",
+		DSN:             "",
 	}
 }
 
@@ -28,6 +30,8 @@ func GetConfig() *Config {
 		"base URL (default http://localhost:8080)")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath,
 		"file storage path (default './storage.json')")
+	flag.StringVar(&cfg.DSN, "d", cfg.DSN,
+		"Database DSN (default \"\")")
 	flag.Parse()
 
 	if envServerAddr := os.Getenv("SERVER_ADDRESS"); envServerAddr != "" {
@@ -38,6 +42,9 @@ func GetConfig() *Config {
 	}
 	if envFileStoragePath := os.Getenv("FILE_STORAGE_PATH"); envFileStoragePath != "" {
 		cfg.FileStoragePath = envFileStoragePath
+	}
+	if envDSN := os.Getenv("DATABASE_DSN"); envDSN != "" {
+		cfg.DSN = envDSN
 	}
 
 	return cfg

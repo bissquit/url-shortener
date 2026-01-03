@@ -10,14 +10,27 @@ import (
 )
 
 func main() {
+	// prepare config
 	cfg := config.GetConfig()
+	if cfg.DSN == "" {
+		log.Fatal("Database DSN not set")
+	}
+
+	// prepare id generator
 	gen := crypto.NewRandomGenerator()
-	//stg := memory.NewURLStorage()
+
+	// prepare storage
 	stg, err := disk.NewFileStorage(cfg.FileStoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	srv := server.NewServer(cfg, stg, gen)
+
+	// prepare server
+	srv, err := server.NewServer(cfg, stg, gen)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer srv.Shutdown()
 
 	if err := srv.Run(); err != nil {
 		log.Fatalf("failed to start server: %v", err)
