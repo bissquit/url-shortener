@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"time"
 
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository/disk"
@@ -35,14 +34,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// try to ping db
-	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
-	// handle ping errors
-	if err = pool.Ping(pingCtx); err != nil {
-		pool.Close()
-		log.Fatal(err)
-	}
+	//// try to ping db
+	//pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	//defer cancel()
+	//// handle ping errors
+	//if err = pool.Ping(pingCtx); err != nil {
+	//	pool.Close()
+	//	log.Fatal(err)
+	//}
 
 	// prepare server
 	srv := server.NewServer(cfg, stg, gen)

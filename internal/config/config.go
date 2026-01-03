@@ -17,7 +17,7 @@ func GetDefaultConfig() *Config {
 		ServerAddr:      ":8080",
 		BaseURL:         "http://localhost:8080",
 		FileStoragePath: "./storage.json",
-		DSN:             "",
+		DSN:             "postgres://shortener:shortener@localhost:5432/shortener?sslmode=disable",
 	}
 }
 
