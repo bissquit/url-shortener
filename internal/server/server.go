@@ -21,40 +21,23 @@ type Server struct {
 	storage   repository.URLRepository
 	router    *chi.Mux
 	generator service.IDGenerator
-	db        *pgxpool.Pool
+	DB        *pgxpool.Pool
 }
 
 func NewServer(config *config.Config,
 	storage repository.URLRepository,
-	generator service.IDGenerator) (*Server, error) {
+	generator service.IDGenerator) *Server {
 	s := &Server{
 		config:    config,
 		storage:   storage,
 		router:    chi.NewRouter(),
 		generator: generator,
-		db:        nil,
+		DB:        nil,
 	}
-
-	ctx := context.Background()
-
-	// we should use defer to close pool, see Shutdown()
-	pool, err := pgxpool.New(ctx, config.DSN)
-	if err != nil {
-		return nil, err
-	}
-
-	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
-
-	if err = pool.Ping(pingCtx); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	s.db = pool
 
 	s.setupRoutes()
 
-	return s, nil
+	return s
 }
 
 func (s *Server) setupRoutes() {
@@ -84,14 +67,15 @@ func (s *Server) Run() error {
 	return http.ListenAndServe(s.config.ServerAddr, s.router)
 }
 
+// Shutdown is single point to close all resources
 func (s *Server) Shutdown() {
-	if s.db != nil {
-		s.db.Close()
+	if s.DB != nil {
+		s.DB.Close()
 	}
 }
 
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
-	if s.db == nil {
+	if s.DB == nil {
 		log.Println("db is not initialized")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -102,7 +86,7 @@ func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
-	if err := s.db.Ping(pingCtx); err != nil {
+	if err := s.DB.Ping(pingCtx); err != nil {
 		log.Printf("db ping failed: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return

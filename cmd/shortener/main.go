@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository/disk"
 	"github.com/bissquit/url-shortener/internal/server"
 	"github.com/bissquit/url-shortener/internal/service/crypto"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -25,11 +28,25 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// prepare server
-	srv, err := server.NewServer(cfg, stg, gen)
+	// initialize db
+	ctx := context.Background()
+	// we should use defer to close pool, see Shutdown()
+	pool, err := pgxpool.New(ctx, cfg.DSN)
 	if err != nil {
 		log.Fatal(err)
 	}
+	// try to ping db
+	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	// handle ping errors
+	if err = pool.Ping(pingCtx); err != nil {
+		pool.Close()
+		log.Fatal(err)
+	}
+
+	// prepare server
+	srv := server.NewServer(cfg, stg, gen)
+	srv.DB = pool
 	defer srv.Shutdown()
 
 	if err := srv.Run(); err != nil {
