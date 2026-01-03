@@ -38,48 +38,34 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer pool.Close()
 
 	// prepare server
 	srv := server.NewServer(cfg, stg, gen)
 	srv.DB = pool
-	defer srv.Shutdown()
 
 	httpSrv := &http.Server{
 		Addr:    cfg.ServerAddr,
 		Handler: srv.Handler(),
 	}
+	log.Println("server is listening on " + cfg.ServerAddr)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("starting server on %s", cfg.ServerAddr)
-		errCh <- httpSrv.ListenAndServe()
+		// log and stop main if server is stopping not by Shutdown/Close
+		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("http server error: %v", err)
+			stop()
+		}
 	}()
 
-	select {
-	case <-ctx.Done():
-		log.Printf("shutdown signal received")
-	case err := <-errCh:
-		// exit if server accidentally down
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("http server error: %v", err)
-		}
-		return
-	}
+	<-ctx.Done()
 
-	// graceful shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("http shutdown error: %v", err)
-	}
-
-	// waiting ListenAndServe
-	err = <-errCh
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Printf("http server finished with error: %v", err)
-	}
+	// Shutdown forces ListenAndServe to return ErrServerClosed
+	_ = httpSrv.Shutdown(shutdownCtx)
 }

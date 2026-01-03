@@ -61,17 +61,12 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/ping", s.Ping)
 }
 
-//func (s *Server) Run() error {
-//	log.Printf("starting server on %s", s.config.ServerAddr)
-//	return http.ListenAndServe(s.config.ServerAddr, s.router)
+//// Shutdown is single point to close all resources
+//func (s *Server) Shutdown() {
+//	if s.DB != nil {
+//		s.DB.Close()
+//	}
 //}
-
-// Shutdown is single point to close all resources
-func (s *Server) Shutdown() {
-	if s.DB != nil {
-		s.DB.Close()
-	}
-}
 
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 	if s.DB == nil {
