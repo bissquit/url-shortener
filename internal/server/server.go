@@ -36,15 +36,14 @@ func NewServer(config *config.Config,
 	}
 
 	s.setupRoutes()
-
 	return s
 }
 
 func (s *Server) setupRoutes() {
 	// add logging middleware to all routes
+	s.router.Use(logging.WithLogging)
 	s.router.Use(compress.GzipRequest)
 	s.router.Use(compress.GzipResponse)
-	s.router.Use(logging.WithLogging)
 
 	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		handler.BadRequest(w, "Not found")
@@ -62,10 +61,10 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/ping", s.Ping)
 }
 
-func (s *Server) Run() error {
-	log.Printf("starting server on %s", s.config.ServerAddr)
-	return http.ListenAndServe(s.config.ServerAddr, s.router)
-}
+//func (s *Server) Run() error {
+//	log.Printf("starting server on %s", s.config.ServerAddr)
+//	return http.ListenAndServe(s.config.ServerAddr, s.router)
+//}
 
 // Shutdown is single point to close all resources
 func (s *Server) Shutdown() {
@@ -81,9 +80,7 @@ func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-
-	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	pingCtx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
 	defer cancel()
 
 	if err := s.DB.Ping(pingCtx); err != nil {
@@ -93,4 +90,8 @@ func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) Handler() http.Handler {
+	return s.router
 }
