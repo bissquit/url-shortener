@@ -64,6 +64,8 @@ func (s *Server) setupRoutes() {
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 	if s.DB == nil {
 		log.Println("database is not used (context is nil)")
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
 	pingCtx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
