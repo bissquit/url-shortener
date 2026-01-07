@@ -29,7 +29,7 @@ func GetConfig() *Config {
 	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL,
 		"base URL (default http://localhost:8080)")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath,
-		"file storage path (default '')")
+		"file storage path (default \"\")")
 	flag.StringVar(&cfg.DSN, "d", cfg.DSN,
 		"Database DSN (default \"\")")
 	flag.Parse()

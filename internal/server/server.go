@@ -63,7 +63,7 @@ func (s *Server) setupRoutes() {
 
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 	if s.DB == nil {
-		log.Println("db is not initialized")
+		log.Println("database is not used (context is nil)")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
