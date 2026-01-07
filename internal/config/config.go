@@ -16,8 +16,8 @@ func GetDefaultConfig() *Config {
 	return &Config{
 		ServerAddr:      ":8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: "./storage.json",
-		DSN:             "postgres://shortener:shortener@localhost:5432/shortener?sslmode=disable",
+		FileStoragePath: "",
+		DSN:             "",
 	}
 }
 
@@ -29,7 +29,7 @@ func GetConfig() *Config {
 	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL,
 		"base URL (default http://localhost:8080)")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath,
-		"file storage path (default './storage.json')")
+		"file storage path (default '')")
 	flag.StringVar(&cfg.DSN, "d", cfg.DSN,
 		"Database DSN (default \"\")")
 	flag.Parse()

@@ -61,13 +61,6 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/ping", s.Ping)
 }
 
-//// Shutdown is single point to close all resources
-//func (s *Server) Shutdown() {
-//	if s.DB != nil {
-//		s.DB.Close()
-//	}
-//}
-
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 	if s.DB == nil {
 		log.Println("db is not initialized")
