@@ -37,6 +37,26 @@ func (s *URLStorage) Create(id, originalURL string) error {
 	return nil
 }
 
+func (s *URLStorage) BatchCreate(items []repository.URLItem) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	// check each id is uniq
+	for _, item := range items {
+		if item.Id == "" {
+			return fmt.Errorf("%w", repository.ErrEmptyID)
+		}
+		if _, ok := s.data[item.Id]; ok {
+			return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.Id)
+		}
+	}
+
+	for _, item := range items {
+		s.data[item.Id] = item.OriginalURL
+	}
+	return nil
+}
+
 // Get retrieves the original URL by its short ID.
 // Returns ErrNotFound if the ID doesn't exist.
 func (s *URLStorage) Get(id string) (string, error) {

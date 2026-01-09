@@ -44,6 +44,29 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 	return err
 }
 
+func (s *PGStorage) BatchCreate(items []repository.URLItem) error {
+	tx, err := s.pool.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	for _, item := range items {
+		if item.Id == "" {
+			return fmt.Errorf("%w", repository.ErrEmptyID)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_, err = tx.Exec(ctx,
+			"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)", item.Id, item.OriginalURL)
+		if err != nil {
+			tx.Rollback(ctx)
+			return err
+		}
+	}
+	return tx.Commit(context.Background())
+}
+
 func (s *PGStorage) Get(id string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
