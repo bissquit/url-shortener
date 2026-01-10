@@ -56,6 +56,7 @@ func (s *Server) setupRoutes() {
 
 	s.router.Post("/", h.Create)
 	s.router.Post("/api/shorten", h.CreateJSON)
+	s.router.Post("/api/shorten/batch", h.CreateBatch)
 	s.router.Get("/", h.Redirect)
 	s.router.Get("/{id}", h.Redirect)
 	s.router.Get("/ping", s.Ping)
