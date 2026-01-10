@@ -132,16 +132,16 @@ func (f *FileStorage) BatchCreate(items []repository.URLItem) error {
 	defer f.mux.Unlock()
 
 	for _, item := range items {
-		if item.Id == "" {
+		if item.ID == "" {
 			return fmt.Errorf("%w", repository.ErrEmptyID)
 		}
-		if _, ok := f.data[item.Id]; ok {
-			return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.Id)
+		if _, ok := f.data[item.ID]; ok {
+			return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.ID)
 		}
 	}
 
 	for _, item := range items {
-		f.data[item.Id] = item.OriginalURL
+		f.data[item.ID] = item.OriginalURL
 	}
 	if err := saveToFile(f.loadFromMemory(), f.filePath); err != nil {
 		return err

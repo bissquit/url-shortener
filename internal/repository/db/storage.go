@@ -55,18 +55,18 @@ func (s *PGStorage) BatchCreate(items []repository.URLItem) error {
 	defer tx.Rollback(ctx)
 
 	for _, item := range items {
-		if item.Id == "" {
+		if item.ID == "" {
 			return fmt.Errorf("%w", repository.ErrEmptyID)
 		}
 
 		_, err = tx.Exec(ctx,
 			"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)",
-			item.Id, item.OriginalURL,
+			item.ID, item.OriginalURL,
 		)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.Id)
+				return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.ID)
 			}
 			return err
 		}

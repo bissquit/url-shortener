@@ -43,16 +43,16 @@ func (s *URLStorage) BatchCreate(items []repository.URLItem) error {
 
 	// check each id is uniq
 	for _, item := range items {
-		if item.Id == "" {
+		if item.ID == "" {
 			return fmt.Errorf("%w", repository.ErrEmptyID)
 		}
-		if _, ok := s.data[item.Id]; ok {
-			return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.Id)
+		if _, ok := s.data[item.ID]; ok {
+			return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.ID)
 		}
 	}
 
 	for _, item := range items {
-		s.data[item.Id] = item.OriginalURL
+		s.data[item.ID] = item.OriginalURL
 	}
 	return nil
 }

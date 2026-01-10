@@ -100,12 +100,13 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		maxAttempts   int = 10
-		maxAttemptsId int = 10
-		id, shortURL  string
-		payload       []repository.BatchItemOutput
-		batch         []repository.URLItem
-		b             []byte
+		maxAttempts   = 10
+		maxAttemptsID = 10
+
+		id, shortURL string
+		payload      []repository.BatchItemOutput
+		batch        []repository.URLItem
+		b            []byte
 	)
 	for i := 0; i < maxAttempts; i++ {
 		seen := make(map[string]struct{}, len(body))
@@ -117,7 +118,7 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 			// to handle case with same id in one batch
 			id = ""
 			unique := false
-			for j := 0; j < maxAttemptsId; j++ {
+			for j := 0; j < maxAttemptsID; j++ {
 				id, err = h.generator.GenerateShortID()
 				if err != nil {
 					log.Printf("cannot generate shorten ID: %v", err)
@@ -151,7 +152,7 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			outputItem := repository.BatchItemOutput{
-				CorrelationId: item.CorrelationId,
+				CorrelationID: item.CorrelationID,
 				ShortURL:      shortURL,
 			}
 			payload = append(payload, outputItem)
@@ -159,7 +160,7 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 			// prepare batch
 			batchItem := repository.URLItem{
 				OriginalURL: item.OriginalURL,
-				Id:          id,
+				ID:          id,
 			}
 			batch = append(batch, batchItem)
 		}
