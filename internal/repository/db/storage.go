@@ -45,26 +45,34 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 }
 
 func (s *PGStorage) BatchCreate(items []repository.URLItem) error {
-	tx, err := s.pool.Begin(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(context.Background())
+	defer tx.Rollback(ctx)
 
 	for _, item := range items {
 		if item.Id == "" {
 			return fmt.Errorf("%w", repository.ErrEmptyID)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
+
 		_, err = tx.Exec(ctx,
-			"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)", item.Id, item.OriginalURL)
+			"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)",
+			item.Id, item.OriginalURL,
+		)
 		if err != nil {
-			tx.Rollback(ctx)
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.Id)
+			}
 			return err
 		}
 	}
-	return tx.Commit(context.Background())
+
+	return tx.Commit(ctx)
 }
 
 func (s *PGStorage) Get(id string) (string, error) {

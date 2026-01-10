@@ -91,96 +91,109 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var badItemsCount int
+	// return if even one url is invalid
 	for _, item := range body {
-		if err := validateURL(item.OriginalURL); err != nil {
-			badItemsCount++
+		if err = validateURL(item.OriginalURL); err != nil {
+			BadRequest(w, "invalid URL in a batch: "+item.OriginalURL)
+			return
 		}
-	}
-	if badItemsCount > 0 {
-		BadRequest(w, "one or more item(s) in a batch has incorrect url")
-		return
 	}
 
 	var (
-		maxAttempts  int = 10
-		id, shortURL string
-		payload      []repository.BatchItemOutput
-		batch        []repository.URLItem
+		maxAttempts   int = 10
+		maxAttemptsId int = 10
+		id, shortURL  string
+		payload       []repository.BatchItemOutput
+		batch         []repository.URLItem
+		b             []byte
 	)
-	for _, item := range body {
-		id = ""
-		for i := 0; i < maxAttempts; i++ {
-			// trying to generate short ID
-			id, err = h.generator.GenerateShortID()
+	for i := 0; i < maxAttempts; i++ {
+		seen := make(map[string]struct{}, len(body))
+
+		payload = make([]repository.BatchItemOutput, 0, len(body))
+		batch = make([]repository.URLItem, 0, len(body))
+		for _, item := range body {
+			// trying to generate short ID multiple times
+			// to handle case with same id in one batch
+			id = ""
+			unique := false
+			for j := 0; j < maxAttemptsId; j++ {
+				id, err = h.generator.GenerateShortID()
+				if err != nil {
+					log.Printf("cannot generate shorten ID: %v", err)
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					return
+				}
+				if id == "" {
+					log.Printf("ERROR: cannot generate id: %v", err)
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					return
+				}
+				if _, ok := seen[id]; ok {
+					continue
+				} else {
+					unique = true
+					break
+				}
+			}
+			if !unique {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
+			seen[id] = struct{}{}
+
+			// prepare output
+			shortURL, err = url.JoinPath(h.baseURL, id)
 			if err != nil {
-				log.Printf("cannot generate shorten ID: %v", err)
+				log.Printf("cannot return shorten URL (baseURL=%q, id=%q): %v", h.baseURL, id, err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
+			outputItem := repository.BatchItemOutput{
+				CorrelationId: item.CorrelationId,
+				ShortURL:      shortURL,
+			}
+			payload = append(payload, outputItem)
 
-			// trying to retrieve id from storage
-			_, err = h.storage.Get(id)
-			if errors.Is(err, repository.ErrNotFound) {
-				break
-			} else if err != nil {
-				log.Printf("unknown storage error: %v", err)
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				return
-			} else {
-				continue
+			// prepare batch
+			batchItem := repository.URLItem{
+				OriginalURL: item.OriginalURL,
+				Id:          id,
 			}
+			batch = append(batch, batchItem)
 		}
-		if id == "" {
-			log.Printf("ERROR: cannot generate id: %v", err)
+
+		err = h.storage.BatchCreate(batch)
+		if errors.Is(err, repository.ErrAlreadyExists) {
+			log.Printf("ERROR: cannot insert batch: %v", err)
+			continue
+		} else if err != nil {
+			log.Printf("ERROR: cannot insert batch: %v", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
-		// prepare output
-		shortURL, err = url.JoinPath(h.baseURL, id)
+		b, err = json.Marshal(payload)
 		if err != nil {
-			log.Printf("cannot return shorten URL (baseURL=%q, id=%q): %v", h.baseURL, id, err)
+			log.Printf("ERROR: cannot marshal response payload: %v", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		outputItem := repository.BatchItemOutput{
-			CorrelationId: item.CorrelationId,
-			ShortURL:      shortURL,
+
+		// start HTTP response only after JSON is ready
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		if _, err = w.Write(b); err != nil {
+			// if writing body fails, status code is already sent, so we can only log the error
+			// it doesn't make sense to send 5xx status after status is set and already sent above
+			log.Printf("ERROR: cannot write response body: %v", err)
+			return
 		}
-		payload = append(payload, outputItem)
-
-		// prepare batch
-		batchItem := repository.URLItem{
-			OriginalURL: item.OriginalURL,
-			Id:          id,
-		}
-		batch = append(batch, batchItem)
-	}
-
-	err = h.storage.BatchCreate(batch)
-	if err != nil {
-		log.Printf("ERROR: cannot store batch: %v", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	b, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("ERROR: cannot marshal response payload: %v", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	// start HTTP response only after JSON is ready
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if _, err = w.Write(b); err != nil {
-		// if writing body fails, status code is already sent, so we can only log the error
-		// it doesn't make sense to send 5xx status after status is set and already sent above
-		log.Printf("ERROR: cannot write response body: %v", err)
-		return
-	}
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
 func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
