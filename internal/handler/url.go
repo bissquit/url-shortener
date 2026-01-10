@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/go-chi/chi/v5"
@@ -84,6 +86,11 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(body) == 0 {
+		BadRequest(w, "Empty request body")
+		return
+	}
+
 	var badItemsCount int
 	for _, item := range body {
 		if err := validateURL(item.OriginalURL); err != nil {
@@ -95,6 +102,85 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var (
+		maxAttempts  int = 10
+		id, shortURL string
+		payload      []repository.BatchItemOutput
+		batch        []repository.URLItem
+	)
+	for _, item := range body {
+		id = ""
+		for i := 0; i < maxAttempts; i++ {
+			// trying to generate short ID
+			id, err = h.generator.GenerateShortID()
+			if err != nil {
+				log.Printf("cannot generate shorten ID: %v", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
+			// trying to retrieve id from storage
+			_, err = h.storage.Get(id)
+			if errors.Is(err, repository.ErrNotFound) {
+				break
+			} else if err != nil {
+				log.Printf("unknown storage error: %v", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			} else {
+				continue
+			}
+		}
+		if id == "" {
+			log.Printf("ERROR: cannot generate id: %v", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		// prepare output
+		shortURL, err = url.JoinPath(h.baseURL, id)
+		if err != nil {
+			log.Printf("cannot return shorten URL (baseURL=%q, id=%q): %v", h.baseURL, id, err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		outputItem := repository.BatchItemOutput{
+			CorrelationId: item.CorrelationId,
+			ShortURL:      shortURL,
+		}
+		payload = append(payload, outputItem)
+
+		// prepare batch
+		batchItem := repository.URLItem{
+			OriginalURL: item.OriginalURL,
+			Id:          id,
+		}
+		batch = append(batch, batchItem)
+	}
+
+	err = h.storage.BatchCreate(batch)
+	if err != nil {
+		log.Printf("ERROR: cannot store batch: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	b, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("ERROR: cannot marshal response payload: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	// start HTTP response only after JSON is ready
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if _, err = w.Write(b); err != nil {
+		// if writing body fails, status code is already sent, so we can only log the error
+		// it doesn't make sense to send 5xx status after status is set and already sent above
+		log.Printf("ERROR: cannot write response body: %v", err)
+		return
+	}
 }
 
 func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
