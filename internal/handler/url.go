@@ -70,19 +70,16 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		BadRequest(w, "wrong Content-Type")
 		return
 	}
-
 	if mediaType != "application/json" {
 		BadRequest(w, "Content-Type must be application/json")
 		return
 	}
 
 	var body []repository.BatchItemInput
-
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		BadRequest(w, "Cannot read request body")
 		return
 	}
-
 	if len(body) == 0 {
 		BadRequest(w, "Empty request body")
 		return
@@ -90,32 +87,30 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 
 	// return if even one url is invalid
 	for _, item := range body {
-		if err = validateURL(item.OriginalURL); err != nil {
+		if err := validateURL(item.OriginalURL); err != nil {
 			BadRequest(w, "invalid URL in a batch: "+item.OriginalURL)
 			return
 		}
 	}
 
-	var (
-		maxAttempts   = 10
-		maxAttemptsID = 10
-
-		id, shortURL string
-		payload      []repository.BatchItemOutput
-		batch        []repository.URLItem
-		b            []byte
+	const (
+		maxBatchAttempts = 10
+		maxIDAttempts    = 10
 	)
-	for i := 0; i < maxAttempts; i++ {
-		seen := make(map[string]struct{}, len(body))
 
-		payload = make([]repository.BatchItemOutput, 0, len(body))
-		batch = make([]repository.URLItem, 0, len(body))
+	for attempt := 0; attempt < maxBatchAttempts; attempt++ {
+		// 1) Собираем batch + payload (только генерация, без обращений к storage)
+		seenIDs := make(map[string]struct{}, len(body))
+
+		batch := make([]repository.URLItem, 0, len(body))
+		payload := make([]repository.BatchItemOutput, 0, len(body))
+
 		for _, item := range body {
-			// trying to generate short ID multiple times
-			// to handle case with same id in one batch
-			id = ""
+			// генерируем id, уникальный внутри запроса
+			var id string
 			unique := false
-			for j := 0; j < maxAttemptsID; j++ {
+
+			for i := 0; i < maxIDAttempts; i++ {
 				id, err = h.generator.GenerateShortID()
 				if err != nil {
 					log.Printf("cannot generate shorten ID: %v", err)
@@ -123,72 +118,75 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				if id == "" {
-					log.Printf("ERROR: cannot generate id: %v", err)
+					log.Printf("ERROR: generator returned empty id")
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 					return
 				}
-				if _, ok := seen[id]; ok {
+				if _, ok := seenIDs[id]; ok {
 					continue
-				} else {
-					unique = true
-					break
 				}
+				unique = true
+				break
 			}
+
 			if !unique {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
-			seen[id] = struct{}{}
+			seenIDs[id] = struct{}{}
 
-			// prepare output
-			shortURL, err = url.JoinPath(h.baseURL, id)
+			shortURL, err := url.JoinPath(h.baseURL, id)
 			if err != nil {
-				log.Printf("cannot return shorten URL (baseURL=%q, id=%q): %v", h.baseURL, id, err)
+				log.Printf("cannot build shorten URL (baseURL=%q, id=%q): %v", h.baseURL, id, err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
-			outputItem := repository.BatchItemOutput{
+
+			payload = append(payload, repository.BatchItemOutput{
 				CorrelationID: item.CorrelationID,
 				ShortURL:      shortURL,
-			}
-			payload = append(payload, outputItem)
-
-			// prepare batch
-			batchItem := repository.URLItem{
-				OriginalURL: item.OriginalURL,
+			})
+			batch = append(batch, repository.URLItem{
 				ID:          id,
-			}
-			batch = append(batch, batchItem)
+				OriginalURL: item.OriginalURL,
+			})
 		}
 
+		// 2) Пытаемся вставить целиком
 		err = h.storage.CreateBatch(batch)
-		if errors.Is(err, repository.ErrIDAlreadyExists) {
-			log.Printf("ERROR: cannot insert batch: %v", err)
+
+		switch {
+		case err == nil:
+			b, err := json.Marshal(payload)
+			if err != nil {
+				log.Printf("ERROR: cannot marshal response payload: %v", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			if _, err := w.Write(b); err != nil {
+				log.Printf("ERROR: cannot write response body: %v", err)
+			}
+			return
+
+		case errors.Is(err, repository.ErrIDAlreadyExists):
+			// коллизия short_id → просто повторяем весь батч с новыми id
+			log.Printf("INFO: short_id collision in batch attempt %d/%d: %v", attempt+1, maxBatchAttempts, err)
 			continue
-		} else if err != nil {
+
+		case errors.Is(err, repository.ErrURLAlreadyExists):
+			// уже существующий original_url → не ретраим, иначе будет вечный цикл
+			http.Error(w, http.StatusText(http.StatusConflict), http.StatusConflict)
+			return
+
+		default:
 			log.Printf("ERROR: cannot insert batch: %v", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-
-		b, err = json.Marshal(payload)
-		if err != nil {
-			log.Printf("ERROR: cannot marshal response payload: %v", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
-		// start HTTP response only after JSON is ready
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if _, err = w.Write(b); err != nil {
-			// if writing body fails, status code is already sent, so we can only log the error
-			// it doesn't make sense to send 5xx status after status is set and already sent above
-			log.Printf("ERROR: cannot write response body: %v", err)
-			return
-		}
-		return
 	}
 
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
