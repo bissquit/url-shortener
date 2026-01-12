@@ -49,9 +49,9 @@ func Test_generateAndStoreShortURL(t *testing.T) {
 				err: nil,
 			},
 			setupStorage: func(s repository.URLRepository) {
-				s.Create(testID, testURL)
+				s.Create(testID, testURL+"/original-url?")
 			},
-			wantStatus: http.StatusConflict,
+			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name: "generator returns empty string id",
