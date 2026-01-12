@@ -18,8 +18,9 @@ type FileStorage struct {
 
 func NewFileStorage(filePath string) (*FileStorage, error) {
 	fs := &FileStorage{
-		data:     make(map[string]string),
-		filePath: filePath,
+		data:         make(map[string]string),
+		dataInverted: make(map[string]string),
+		filePath:     filePath,
 	}
 
 	items, err := restoreFromFile(filePath)
