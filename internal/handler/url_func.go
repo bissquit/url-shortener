@@ -48,43 +48,52 @@ var (
 	ErrIDGenerationExhausted = errors.New("id generation exhausted")
 )
 
-func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, error) {
-	var shortenID string
-	maxAttempts := 10
+func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, bool, error) {
+	const maxAttempts = 10
+
 	for i := 0; i < maxAttempts; i++ {
 		// trying to generate short ID
 		id, err := h.generator.GenerateShortID()
 		if err != nil {
-			return "", fmt.Errorf("cannot generate shorten ID: %w", err)
+			return "", false, fmt.Errorf("cannot generate shorten ID: %w", err)
+		}
+		if id == "" {
+			return "", false, fmt.Errorf("generator returned empty id")
 		}
 
 		// trying to save ID
 		err = h.storage.Create(id, originalURL)
-		if err == nil {
-			shortenID = id
-			// exit if success
-			break
-		}
+		switch {
+		case err == nil:
+			shortURL, err := url.JoinPath(h.baseURL, id)
+			if err != nil {
+				return "", false, fmt.Errorf("cannot build shorten URL (baseURL=%q, id=%q): %w", h.baseURL, id, err)
+			}
+			return shortURL, true, nil
 
-		// go next loop iteration if ID is already exist
-		if errors.Is(err, repository.ErrIDAlreadyExists) {
-			log.Printf("INFO: shorten ID collision detected in generation attempt %d (max %d): %v", i+1, maxAttempts, err)
+		case errors.Is(err, repository.ErrIDAlreadyExists):
+			// short_id collision --> trying another id
+			log.Printf("INFO: short_id collision (attempt %d/%d): %v", i+1, maxAttempts, err)
 			continue
+
+		case errors.Is(err, repository.ErrURLAlreadyExists):
+			// URL already exist --> make additional request to return existing short_url
+			existingID, err2 := h.storage.GetIDByURL(originalURL)
+			if err2 != nil {
+				return "", false, fmt.Errorf("url exists but cannot get id by url: %w", err2)
+			}
+			shortURL, err2 := url.JoinPath(h.baseURL, existingID)
+			if err2 != nil {
+				return "", false, fmt.Errorf("cannot build existing shorten URL (baseURL=%q, id=%q): %w", h.baseURL, existingID, err2)
+			}
+			return shortURL, false, nil
+
+		default:
+			return "", false, fmt.Errorf("unknown storage error: %w", err)
 		}
-
-		return "", fmt.Errorf("unknown storage error: %w", err)
 	}
 
-	if shortenID == "" {
-		return "", fmt.Errorf("%w: attempts=%d", ErrIDGenerationExhausted, maxAttempts)
-	}
-
-	shortURL, err := url.JoinPath(h.baseURL, shortenID)
-	if err != nil {
-		return "", fmt.Errorf("cannot return shorten URL (baseURL=%q, id=%q): %w", h.baseURL, shortenID, err)
-	}
-
-	return shortURL, nil
+	return "", false, fmt.Errorf("%w: attempts=%d", ErrIDGenerationExhausted, maxAttempts)
 }
 
 func BadRequest(w http.ResponseWriter, message string) {

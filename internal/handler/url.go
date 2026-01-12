@@ -20,51 +20,34 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		BadRequest(w, "wrong Content-Type")
 		return
 	}
-
 	if mediaType != "application/json" {
 		BadRequest(w, "Content-Type must be application/json")
 		return
 	}
 
 	var body requestURL
-
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		BadRequest(w, "Cannot read request body")
 		return
 	}
-
 	if err := validateURL(body.URL); err != nil {
 		BadRequest(w, err.Error())
 		return
 	}
 
-	var shortURL string
-	var status = http.StatusConflict
-
-	id, err := h.storage.GetIDByURL(body.URL)
-	if errors.Is(err, repository.ErrNotFound) {
-		status = http.StatusCreated
-		shortURL, err = generateAndStoreShortURL(body.URL, h)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-	} else if err != nil {
-		log.Printf("unknown error: %v", err)
+	shortURL, created, err := generateAndStoreShortURL(body.URL, h)
+	if err != nil {
+		log.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	} else {
-		shortURL, err = url.JoinPath(h.baseURL, id)
-		if err != nil {
-			log.Printf("cannot return shorten URL (baseURL=%q, id=%q): %v", h.baseURL, id, err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
+		return
 	}
 
-	// prepare response payload separate from HTTP writing
+	status := http.StatusConflict
+	if created {
+		status = http.StatusCreated
+	}
+
 	payload := responseURL{Result: shortURL}
-	// convert the payload to JSON bytes before sending any headers/status
 	b, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("ERROR: cannot marshal response payload: %v", err)
@@ -72,12 +55,9 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// start HTTP response only after JSON is ready
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if _, err := w.Write(b); err != nil {
-		// if writing body fails, status code is already sent, so we can only log the error
-		// it doesn't make sense to send 5xx status after status is set and already sent above
 		log.Printf("ERROR: cannot write response body: %v", err)
 		return
 	}
@@ -221,7 +201,6 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		BadRequest(w, "wrong Content-Type")
 		return
 	}
-
 	if mediaType != "text/plain" {
 		BadRequest(w, "Content-Type must be text/plain")
 		return
@@ -232,39 +211,25 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		BadRequest(w, "Cannot read request body")
 		return
 	}
-
 	if err := validateURL(string(body)); err != nil {
 		BadRequest(w, err.Error())
 		return
 	}
 
-	var shortURL string
-	var status = http.StatusConflict
-
-	id, err := h.storage.GetIDByURL(string(body))
-	if errors.Is(err, repository.ErrNotFound) {
-		status = http.StatusCreated
-		shortURL, err = generateAndStoreShortURL(string(body), h)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-	} else if err != nil {
-		log.Printf("unknown error: %v", err)
+	shortURL, created, err := generateAndStoreShortURL(string(body), h)
+	if err != nil {
+		log.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	} else {
-		shortURL, err = url.JoinPath(h.baseURL, id)
-		if err != nil {
-			log.Printf("cannot return shorten URL (baseURL=%q, id=%q): %v", h.baseURL, id, err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
+		return
+	}
+
+	status := http.StatusConflict
+	if created {
+		status = http.StatusCreated
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
-	// write body, alternative for fmt.Fprint(w, shortURL)
 	w.Write([]byte(shortURL))
 }
 

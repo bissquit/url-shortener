@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bissquit/url-shortener/internal/repository"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,13 +32,19 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 	defer cancel()
 
 	_, err := s.pool.Exec(ctx,
-		"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)", id, originalURL)
+		"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)",
+		id, originalURL,
+	)
 	if err == nil {
 		return nil
 	}
 
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		if pgErr.ConstraintName == "idx_original_url" {
+			return fmt.Errorf("%w: %s", repository.ErrURLAlreadyExists, originalURL)
+		}
+		// UNIQUE/PK by short_id
 		return fmt.Errorf("%w: %s", repository.ErrIDAlreadyExists, id)
 	}
 
@@ -65,7 +72,10 @@ func (s *PGStorage) CreateBatch(items []repository.URLItem) error {
 		)
 		if err != nil {
 			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+				if pgErr.ConstraintName == "idx_original_url" {
+					return fmt.Errorf("%w: %s", repository.ErrURLAlreadyExists, item.OriginalURL)
+				}
 				return fmt.Errorf("%w: %s", repository.ErrIDAlreadyExists, item.ID)
 			}
 			return err
