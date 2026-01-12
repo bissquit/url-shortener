@@ -67,7 +67,7 @@ func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, error
 		}
 
 		// go next loop iteration if ID is already exist
-		if errors.Is(err, repository.ErrAlreadyExists) {
+		if errors.Is(err, repository.ErrIDAlreadyExists) {
 			log.Printf("INFO: shorten ID collision detected in generation attempt %d (max %d): %v", i+1, maxAttempts, err)
 			continue
 		}

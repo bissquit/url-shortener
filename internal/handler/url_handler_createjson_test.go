@@ -159,6 +159,7 @@ func Test_HandlersCreateJSON(t *testing.T) {
 			res := w.Result()
 			defer res.Body.Close()
 			resBody, err := io.ReadAll(res.Body)
+			t.Logf("----------DEBUG: %v", string(resBody))
 			require.NoError(t, err)
 
 			// check status code
@@ -171,6 +172,7 @@ func Test_HandlersCreateJSON(t *testing.T) {
 				// retrieve JSON
 				var resBodyJSON responseURL
 				err = json.Unmarshal(resBody, &resBodyJSON)
+				t.Logf("----------DEBUG: %v", resBodyJSON)
 				require.NoError(t, err)
 
 				// check if there is a valid url in the body
@@ -184,8 +186,11 @@ func Test_HandlersCreateJSON(t *testing.T) {
 
 				// check if id was stored
 				id := strings.TrimPrefix(resBodyJSON.Result, baseURL+"/")
+				v, _ := storage.GetIDByURL(tt.input.body)
+				t.Logf("------------DEBUG: %v", v)
 
-				originalURL, err := storage.Get(id)
+				originalURL, err := storage.GetURLByID(id)
+				t.Logf("------------DEBUG: %v", originalURL)
 				assert.NoError(t, err, "Short ID is not stored")
 				// check if original url is correct
 				assert.Equal(t, tt.input.body, originalURL, "OriginalURL is wrong")

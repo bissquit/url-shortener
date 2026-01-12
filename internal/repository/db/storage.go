@@ -38,13 +38,13 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, id)
+		return fmt.Errorf("%w: %s", repository.ErrIDAlreadyExists, id)
 	}
 
 	return err
 }
 
-func (s *PGStorage) BatchCreate(items []repository.URLItem) error {
+func (s *PGStorage) CreateBatch(items []repository.URLItem) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -66,7 +66,7 @@ func (s *PGStorage) BatchCreate(items []repository.URLItem) error {
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, item.ID)
+				return fmt.Errorf("%w: %s", repository.ErrIDAlreadyExists, item.ID)
 			}
 			return err
 		}
@@ -75,7 +75,7 @@ func (s *PGStorage) BatchCreate(items []repository.URLItem) error {
 	return tx.Commit(ctx)
 }
 
-func (s *PGStorage) Get(id string) (string, error) {
+func (s *PGStorage) GetURLByID(id string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -87,6 +87,27 @@ func (s *PGStorage) Get(id string) (string, error) {
 
 	if err == nil {
 		return url, nil
+	}
+
+	if err == pgx.ErrNoRows {
+		return "", repository.ErrNotFound
+	}
+
+	return "", err
+}
+
+func (s *PGStorage) GetIDByURL(url string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	raw := s.pool.QueryRow(ctx,
+		"SELECT short_id FROM urls WHERE original_url = $1", url)
+
+	var id string
+	err := raw.Scan(&id)
+
+	if err == nil {
+		return id, nil
 	}
 
 	if err == pgx.ErrNoRows {

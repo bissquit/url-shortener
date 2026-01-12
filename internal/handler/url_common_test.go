@@ -51,7 +51,7 @@ func Test_generateAndStoreShortURL(t *testing.T) {
 			setupStorage: func(s repository.URLRepository) {
 				s.Create(testID, testURL)
 			},
-			wantStatus: http.StatusInternalServerError,
+			wantStatus: http.StatusConflict,
 		},
 		{
 			name: "generator returns empty string id",

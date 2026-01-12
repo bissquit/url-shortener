@@ -3,9 +3,10 @@ package repository
 import "errors"
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrAlreadyExists = errors.New("already exists")
-	ErrEmptyID       = errors.New("empty id")
+	ErrNotFound         = errors.New("not found")
+	ErrIDAlreadyExists  = errors.New("ID already exists")
+	ErrURLAlreadyExists = errors.New("URL already exists")
+	ErrEmptyID          = errors.New("empty id")
 )
 
 type URLItem struct {
@@ -25,6 +26,7 @@ type BatchItemOutput struct {
 
 type URLRepository interface {
 	Create(id, originalURL string) error
-	BatchCreate(items []URLItem) error
-	Get(id string) (string, error)
+	CreateBatch(items []URLItem) error
+	GetURLByID(id string) (string, error)
+	GetIDByURL(url string) (string, error)
 }
