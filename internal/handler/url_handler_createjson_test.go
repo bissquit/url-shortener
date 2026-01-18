@@ -185,7 +185,7 @@ func Test_HandlersCreateJSON(t *testing.T) {
 				// check if id was stored
 				id := strings.TrimPrefix(resBodyJSON.Result, baseURL+"/")
 
-				originalURL, err := storage.Get(id)
+				originalURL, err := storage.GetURLByID(id)
 				assert.NoError(t, err, "Short ID is not stored")
 				// check if original url is correct
 				assert.Equal(t, tt.input.body, originalURL, "OriginalURL is wrong")

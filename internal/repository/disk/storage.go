@@ -10,15 +10,17 @@ import (
 )
 
 type FileStorage struct {
-	mux      sync.RWMutex
-	data     map[string]string
-	filePath string
+	mux          sync.RWMutex
+	data         map[string]string
+	dataInverted map[string]string
+	filePath     string
 }
 
 func NewFileStorage(filePath string) (*FileStorage, error) {
 	fs := &FileStorage{
-		data:     make(map[string]string),
-		filePath: filePath,
+		data:         make(map[string]string),
+		dataInverted: make(map[string]string),
+		filePath:     filePath,
 	}
 
 	items, err := restoreFromFile(filePath)
@@ -61,11 +63,19 @@ func (f *FileStorage) loadToMemory(items []fileStorageItem) error {
 	defer f.mux.Unlock()
 
 	for _, item := range items {
+		// check if id is uniq
 		_, ok := f.data[item.ShortURL]
 		if ok {
-			return fmt.Errorf("failed to initialize storage: %w: %s", repository.ErrAlreadyExists, item.ShortURL)
+			return fmt.Errorf("failed to initialize storage: %w: %s", repository.ErrIDAlreadyExists, item.ShortURL)
 		}
+		// check if url is uniq
+		_, ok = f.dataInverted[item.OriginalURL]
+		if ok {
+			return fmt.Errorf("failed to initialize storage: %w: %s", repository.ErrURLAlreadyExists, item.OriginalURL)
+		}
+
 		f.data[item.ShortURL] = item.OriginalURL
+		f.dataInverted[item.OriginalURL] = item.ShortURL
 	}
 
 	return nil
@@ -114,11 +124,19 @@ func (f *FileStorage) Create(id, originalURL string) error {
 	f.mux.Lock()
 	defer f.mux.Unlock()
 
+	// check if id is uniq
 	_, ok := f.data[id]
 	if ok {
-		return fmt.Errorf("%w: %s", repository.ErrAlreadyExists, id)
+		return fmt.Errorf("%w: %s", repository.ErrIDAlreadyExists, id)
 	}
+	// check if url is uniq
+	_, ok = f.dataInverted[originalURL]
+	if ok {
+		return fmt.Errorf("%w: %s", repository.ErrURLAlreadyExists, originalURL)
+	}
+
 	f.data[id] = originalURL
+	f.dataInverted[originalURL] = id
 
 	if err := saveToFile(f.loadFromMemory(), f.filePath); err != nil {
 		return err
@@ -127,7 +145,35 @@ func (f *FileStorage) Create(id, originalURL string) error {
 	return nil
 }
 
-func (f *FileStorage) Get(id string) (string, error) {
+func (f *FileStorage) CreateBatch(items []repository.URLItem) error {
+	f.mux.Lock()
+	defer f.mux.Unlock()
+
+	for _, item := range items {
+		if item.ID == "" {
+			return fmt.Errorf("%w", repository.ErrEmptyID)
+		}
+		// check if id is uniq
+		if _, ok := f.data[item.ID]; ok {
+			return fmt.Errorf("%w: %s", repository.ErrIDAlreadyExists, item.ID)
+		}
+		// check if url is uniq
+		if _, ok := f.dataInverted[item.OriginalURL]; ok {
+			return fmt.Errorf("%w: %s", repository.ErrURLAlreadyExists, item.OriginalURL)
+		}
+	}
+
+	for _, item := range items {
+		f.data[item.ID] = item.OriginalURL
+		f.dataInverted[item.OriginalURL] = item.ID
+	}
+	if err := saveToFile(f.loadFromMemory(), f.filePath); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *FileStorage) GetURLByID(id string) (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
@@ -136,4 +182,15 @@ func (f *FileStorage) Get(id string) (string, error) {
 		return "", repository.ErrNotFound
 	}
 	return url, nil
+}
+
+func (f *FileStorage) GetIDByURL(url string) (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	id, ok := f.dataInverted[url]
+	if !ok {
+		return "", repository.ErrNotFound
+	}
+	return id, nil
 }

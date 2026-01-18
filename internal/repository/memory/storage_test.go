@@ -24,7 +24,7 @@ func Test_URLStorageCreate(t *testing.T) {
 	err = s.Create(id, urlNew)
 	assert.Error(t, err)
 	// check not rewrited
-	u, err := s.Get(id)
+	u, err := s.GetURLByID(id)
 	assert.NoError(t, err)
 	assert.NotEqual(t, u, urlNew)
 
@@ -39,11 +39,11 @@ func Test_URLStorageGet(t *testing.T) {
 	s := NewURLStorage()
 	s.Create(id, url)
 
-	u, err := s.Get(id)
+	u, err := s.GetURLByID(id)
 	assert.NoError(t, err)
 	assert.Equal(t, url, u)
 
-	_, err = s.Get("does-not-exist")
+	_, err = s.GetURLByID("does-not-exist")
 	assert.Error(t, err)
 	assert.Equal(t, repository.ErrNotFound, err)
 }
