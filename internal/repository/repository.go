@@ -24,9 +24,15 @@ type BatchItemOutput struct {
 	ShortURL      string `json:"short_url"`
 }
 
+type UserURL struct {
+	ShortID     string
+	OriginalURL string
+}
+
 type URLRepository interface {
-	Create(id, originalURL string) error
-	CreateBatch(items []URLItem) error
+	Create(id, originalURL, userID string) error
+	CreateBatch(items []URLItem, userID string) error
 	GetURLByID(id string) (string, error)
 	GetIDByURL(url string) (string, error)
+	GetURLsByUserID(userID string) ([]UserURL, error)
 }
