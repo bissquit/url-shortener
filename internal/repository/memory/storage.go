@@ -7,21 +7,31 @@ import (
 	"github.com/bissquit/url-shortener/internal/repository"
 )
 
+type URLStorageItem struct {
+	OriginalURL string
+	UserID      string
+}
+
+type URLStorageItemInverted struct {
+	ID     string
+	UserID string
+}
+
 // in-memory url storage
 type URLStorage struct {
 	mux          sync.RWMutex
-	data         map[string]string
-	dataInverted map[string]string
+	data         map[string]URLStorageItem
+	dataInverted map[string]URLStorageItemInverted
 }
 
 func NewURLStorage() repository.URLRepository {
 	return &URLStorage{
-		data:         make(map[string]string),
-		dataInverted: make(map[string]string),
+		data:         make(map[string]URLStorageItem),
+		dataInverted: make(map[string]URLStorageItemInverted),
 	}
 }
 
-func (s *URLStorage) Create(id, originalURL string) error {
+func (s *URLStorage) Create(id, originalURL, userID string) error {
 	if id == "" {
 		return fmt.Errorf("%w", repository.ErrEmptyID)
 	}
@@ -40,12 +50,18 @@ func (s *URLStorage) Create(id, originalURL string) error {
 		return fmt.Errorf("%w: %s", repository.ErrURLAlreadyExists, originalURL)
 	}
 
-	s.data[id] = originalURL
-	s.dataInverted[originalURL] = id
+	s.data[id] = URLStorageItem{
+		OriginalURL: originalURL,
+		UserID:      userID,
+	}
+	s.dataInverted[originalURL] = URLStorageItemInverted{
+		ID:     id,
+		UserID: userID,
+	}
 	return nil
 }
 
-func (s *URLStorage) CreateBatch(items []repository.URLItem) error {
+func (s *URLStorage) CreateBatch(items []repository.URLItem, userID string) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -64,8 +80,14 @@ func (s *URLStorage) CreateBatch(items []repository.URLItem) error {
 	}
 
 	for _, item := range items {
-		s.data[item.ID] = item.OriginalURL
-		s.dataInverted[item.OriginalURL] = item.ID
+		s.data[item.ID] = URLStorageItem{
+			OriginalURL: item.OriginalURL,
+			UserID:      userID,
+		}
+		s.dataInverted[item.OriginalURL] = URLStorageItemInverted{
+			ID:     item.ID,
+			UserID: userID,
+		}
 	}
 	return nil
 }
@@ -76,20 +98,38 @@ func (s *URLStorage) GetURLByID(id string) (string, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 	// getting key from map returns additional bool output ('false' if key doesn't exist)
-	url, ok := s.data[id]
+	item, ok := s.data[id]
 	if !ok {
 		return "", repository.ErrNotFound
 	}
-	return url, nil
+	return item.OriginalURL, nil
 }
 
 func (s *URLStorage) GetIDByURL(url string) (string, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 
-	id, ok := s.dataInverted[url]
+	itemInverted, ok := s.dataInverted[url]
 	if !ok {
 		return "", repository.ErrNotFound
 	}
-	return id, nil
+	return itemInverted.ID, nil
+}
+
+func (s *URLStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+
+	var userURLs []repository.UserURL
+
+	for id, item := range s.data {
+		if item.UserID == userID {
+			userURLs = append(userURLs, repository.UserURL{
+				ShortID:     id,
+				OriginalURL: item.OriginalURL,
+			})
+		}
+	}
+
+	return userURLs, nil
 }

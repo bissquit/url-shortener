@@ -23,7 +23,7 @@ func NewDBStorage(p *pgxpool.Pool) *PGStorage {
 	}
 }
 
-func (s *PGStorage) Create(id string, originalURL string) error {
+func (s *PGStorage) Create(id string, originalURL, userID string) error {
 	if id == "" {
 		return fmt.Errorf("%w", repository.ErrEmptyID)
 	}
@@ -32,8 +32,8 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 	defer cancel()
 
 	_, err := s.pool.Exec(ctx,
-		"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)",
-		id, originalURL,
+		"INSERT INTO urls (short_id, original_url, user_id) VALUES ($1, $2, $3)",
+		id, originalURL, userID,
 	)
 	if err == nil {
 		return nil
@@ -51,7 +51,7 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 	return err
 }
 
-func (s *PGStorage) CreateBatch(items []repository.URLItem) error {
+func (s *PGStorage) CreateBatch(items []repository.URLItem, userID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -67,8 +67,8 @@ func (s *PGStorage) CreateBatch(items []repository.URLItem) error {
 		}
 
 		_, err = tx.Exec(ctx,
-			"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)",
-			item.ID, item.OriginalURL,
+			"INSERT INTO urls (short_id, original_url, user_id) VALUES ($1, $2, $3)",
+			item.ID, item.OriginalURL, userID,
 		)
 		if err != nil {
 			var pgErr *pgconn.PgError
@@ -125,4 +125,27 @@ func (s *PGStorage) GetIDByURL(url string) (string, error) {
 	}
 
 	return "", err
+}
+
+func (s *PGStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx,
+		"SELECT short_id, original_url FROM urls WHERE user_id = $1", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []repository.UserURL
+	for rows.Next() {
+		var item repository.UserURL
+		if err = rows.Scan(&item.ShortID, &item.OriginalURL); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
 }

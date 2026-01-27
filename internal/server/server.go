@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bissquit/url-shortener/internal/auth"
 	"github.com/bissquit/url-shortener/internal/compress"
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/handler"
@@ -41,6 +42,7 @@ func NewServer(config *config.Config,
 
 func (s *Server) setupRoutes() {
 	// add logging middleware to all routes
+	s.router.Use(auth.JWTAuth)
 	s.router.Use(logging.WithLogging)
 	s.router.Use(compress.GzipRequest)
 	s.router.Use(compress.GzipResponse)
@@ -54,12 +56,15 @@ func (s *Server) setupRoutes() {
 
 	h := handler.NewURLHandlers(s.storage, s.config.BaseURL, s.generator)
 
+	// post
 	s.router.Post("/", h.Create)
 	s.router.Post("/api/shorten", h.CreateJSON)
 	s.router.Post("/api/shorten/batch", h.CreateBatch)
+	// get
 	s.router.Get("/", h.Redirect)
 	s.router.Get("/{id}", h.Redirect)
 	s.router.Get("/ping", s.Ping)
+	s.router.Get("/api/user/urls", h.GetUserURLs)
 }
 
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
