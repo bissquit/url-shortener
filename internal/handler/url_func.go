@@ -33,6 +33,11 @@ type responseURL struct {
 	Result string `json:"result"`
 }
 
+type userURLResponseItem struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
 func validateURL(u string) error {
 	if u == "" {
 		return errors.New("empty URL value in request body")
@@ -48,7 +53,7 @@ var (
 	ErrIDGenerationExhausted = errors.New("id generation exhausted")
 )
 
-func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, bool, error) {
+func generateAndStoreShortURL(originalURL string, h *URLHandlers, userID string) (string, bool, error) {
 	const maxAttempts = 10
 
 	for i := 0; i < maxAttempts; i++ {
@@ -62,7 +67,7 @@ func generateAndStoreShortURL(originalURL string, h *URLHandlers) (string, bool,
 		}
 
 		// trying to save ID
-		err = h.storage.Create(id, originalURL)
+		err = h.storage.Create(id, originalURL, userID)
 		switch {
 		case err == nil:
 			shortURL, err := url.JoinPath(h.baseURL, id)
