@@ -7,6 +7,8 @@ var (
 	ErrIDAlreadyExists  = errors.New("ID already exists")
 	ErrURLAlreadyExists = errors.New("URL already exists")
 	ErrEmptyID          = errors.New("empty id")
+	ErrDeleted          = errors.New("deleted")
+	ErrForbidden        = errors.New("forbidden")
 )
 
 type URLItem struct {
@@ -30,8 +32,12 @@ type UserURL struct {
 }
 
 type URLRepository interface {
+	// create
 	Create(id, originalURL, userID string) error
 	CreateBatch(items []URLItem, userID string) error
+	// delete
+	DeleteBatch(userID string, ids []string) error
+	// get
 	GetURLByID(id string) (string, error)
 	GetIDByURL(url string) (string, error)
 	GetURLsByUserID(userID string) ([]UserURL, error)

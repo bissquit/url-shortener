@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/bissquit/url-shortener/internal/repository"
@@ -10,11 +11,13 @@ import (
 type URLStorageItem struct {
 	OriginalURL string
 	UserID      string
+	DeletedFlag bool
 }
 
 type URLStorageItemInverted struct {
-	ID     string
-	UserID string
+	ID          string
+	UserID      string
+	DeletedFlag bool
 }
 
 // in-memory url storage
@@ -102,6 +105,11 @@ func (s *URLStorage) GetURLByID(id string) (string, error) {
 	if !ok {
 		return "", repository.ErrNotFound
 	}
+
+	if item.DeletedFlag {
+		return "", repository.ErrDeleted
+	}
+
 	return item.OriginalURL, nil
 }
 
@@ -113,6 +121,11 @@ func (s *URLStorage) GetIDByURL(url string) (string, error) {
 	if !ok {
 		return "", repository.ErrNotFound
 	}
+
+	if itemInverted.DeletedFlag {
+		return "", repository.ErrDeleted
+	}
+
 	return itemInverted.ID, nil
 }
 
@@ -123,7 +136,7 @@ func (s *URLStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error
 	var userURLs []repository.UserURL
 
 	for id, item := range s.data {
-		if item.UserID == userID {
+		if item.UserID == userID && !item.DeletedFlag {
 			userURLs = append(userURLs, repository.UserURL{
 				ShortID:     id,
 				OriginalURL: item.OriginalURL,
@@ -132,4 +145,32 @@ func (s *URLStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error
 	}
 
 	return userURLs, nil
+}
+
+func (s *URLStorage) DeleteBatch(userID string, ids []string) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	for _, id := range ids {
+		item, ok := s.data[id]
+		if !ok {
+			continue
+		}
+
+		if item.UserID == userID && !item.DeletedFlag {
+			itemInverted, ok := s.dataInverted[item.OriginalURL]
+			if !ok {
+				// in case of damaged inverted dataset
+				log.Printf("inconsistent inverted dataset for item: %s", id)
+			}
+
+			item.DeletedFlag = true
+			s.data[id] = item
+
+			itemInverted.DeletedFlag = true
+			s.dataInverted[item.OriginalURL] = itemInverted
+		}
+	}
+
+	return nil
 }
