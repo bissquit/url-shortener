@@ -121,7 +121,6 @@ func (s *URLStorage) GetIDByURL(url string) (string, error) {
 	if !ok {
 		return "", repository.ErrNotFound
 	}
-
 	if itemInverted.DeletedFlag {
 		return "", repository.ErrDeleted
 	}
@@ -162,6 +161,7 @@ func (s *URLStorage) DeleteBatch(userID string, ids []string) error {
 			if !ok {
 				// in case of damaged inverted dataset
 				log.Printf("inconsistent inverted dataset for item: %s", id)
+				continue
 			}
 
 			item.DeletedFlag = true

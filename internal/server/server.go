@@ -65,6 +65,8 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/{id}", h.Redirect)
 	s.router.Get("/ping", s.Ping)
 	s.router.Get("/api/user/urls", h.GetUserURLs)
+	// delete
+	s.router.Delete("/api/user/urls", h.DeleteUserURLs)
 }
 
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {

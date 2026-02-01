@@ -302,3 +302,38 @@ func (h *URLHandlers) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ERROR: cannot encode user urls: %v", err)
 	}
 }
+
+func (h *URLHandlers) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if userID == "" || !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	defer r.Body.Close()
+	if err != nil {
+		BadRequest(w, "wrong Content-Type")
+		return
+	}
+	if mediaType != "application/json" {
+		BadRequest(w, "Content-Type must be application/json")
+		return
+	}
+
+	var ids []string
+	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
+		BadRequest(w, "Cannot read request body")
+		return
+	}
+
+	if len(ids) != 0 {
+		go func(userID string, ids []string) {
+			if err := h.storage.DeleteBatch(userID, ids); err != nil {
+				log.Printf("delete batch failed: user=%s, ids=%v, err=%v", userID, ids, err)
+			}
+		}(userID, ids)
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}

@@ -3,6 +3,7 @@ package disk
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -12,11 +13,13 @@ import (
 type FileStorageItem struct {
 	OriginalURL string
 	UserID      string
+	DeletedFlag bool
 }
 
 type FileStorageItemInverted struct {
-	ID     string
-	UserID string
+	ID          string
+	UserID      string
+	DeletedFlag bool
 }
 
 type FileStorage struct {
@@ -51,6 +54,7 @@ type fileStorageItem struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 	UserID      string `json:"user_id"`
+	DeletedFlag bool   `json:"is_deleted"`
 }
 
 // intermediate convertor from in-memory struct to json-in-file
@@ -65,6 +69,7 @@ func (f *FileStorage) loadFromMemory() []fileStorageItem {
 			ShortURL:    shortURL,
 			OriginalURL: FSItem.OriginalURL,
 			UserID:      FSItem.UserID,
+			DeletedFlag: FSItem.DeletedFlag,
 		})
 	}
 	return items
@@ -89,10 +94,12 @@ func (f *FileStorage) loadToMemory(items []fileStorageItem) error {
 		f.data[item.ShortURL] = FileStorageItem{
 			OriginalURL: item.OriginalURL,
 			UserID:      item.UserID,
+			DeletedFlag: item.DeletedFlag,
 		}
 		f.dataInverted[item.OriginalURL] = FileStorageItemInverted{
-			ID:     item.ShortURL,
-			UserID: item.UserID,
+			ID:          item.ShortURL,
+			UserID:      item.UserID,
+			DeletedFlag: item.DeletedFlag,
 		}
 	}
 
@@ -211,6 +218,11 @@ func (f *FileStorage) GetURLByID(id string) (string, error) {
 	if !ok {
 		return "", repository.ErrNotFound
 	}
+
+	if item.DeletedFlag {
+		return "", repository.ErrDeleted
+	}
+
 	return item.OriginalURL, nil
 }
 
@@ -218,11 +230,15 @@ func (f *FileStorage) GetIDByURL(url string) (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	itemReverted, ok := f.dataInverted[url]
+	itemInverted, ok := f.dataInverted[url]
 	if !ok {
 		return "", repository.ErrNotFound
 	}
-	return itemReverted.ID, nil
+	if itemInverted.DeletedFlag {
+		return "", repository.ErrDeleted
+	}
+
+	return itemInverted.ID, nil
 }
 
 func (f *FileStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error) {
@@ -232,7 +248,7 @@ func (f *FileStorage) GetURLsByUserID(userID string) ([]repository.UserURL, erro
 	var userURLs []repository.UserURL
 
 	for id, item := range f.data {
-		if item.UserID == userID {
+		if item.UserID == userID && !item.DeletedFlag {
 			userURLs = append(userURLs, repository.UserURL{
 				ShortID:     id,
 				OriginalURL: item.OriginalURL,
@@ -241,4 +257,37 @@ func (f *FileStorage) GetURLsByUserID(userID string) ([]repository.UserURL, erro
 	}
 
 	return userURLs, nil
+}
+
+func (f *FileStorage) DeleteBatch(userID string, ids []string) error {
+	f.mux.Lock()
+	defer f.mux.Unlock()
+
+	for _, id := range ids {
+		item, ok := f.data[id]
+		if !ok {
+			continue
+		}
+
+		if item.UserID == userID && !item.DeletedFlag {
+			itemInverted, ok := f.dataInverted[item.OriginalURL]
+			if !ok {
+				// in case of damaged inverted dataset
+				log.Printf("inconsistent inverted dataset for item: %s", id)
+				continue
+			}
+
+			item.DeletedFlag = true
+			f.data[id] = item
+
+			itemInverted.DeletedFlag = true
+			f.dataInverted[item.OriginalURL] = itemInverted
+		}
+	}
+
+	if err := saveToFile(f.loadFromMemory(), f.filePath); err != nil {
+		return err
+	}
+
+	return nil
 }
