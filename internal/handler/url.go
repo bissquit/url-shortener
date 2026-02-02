@@ -255,6 +255,10 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	originalURL, err := h.storage.GetURLByID(id)
+	if err == repository.ErrDeleted {
+		http.Error(w, http.StatusText(http.StatusGone), http.StatusGone)
+		return
+	}
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
