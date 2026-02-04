@@ -26,18 +26,23 @@ func Test_HandlersCreate(t *testing.T) {
 		body        string
 		contentType string
 		baseURL     string
+		cookieValue string
 	}
+
 	type want struct {
 		code        int
 		contentType string
+		hasCookie   bool
+		cookieName  string
 	}
+
 	tests := []struct {
 		name  string
 		input input
 		want  want
 	}{
 		{
-			name: "successful URL creation",
+			name: "successful URL creation - no cookie",
 			input: input{
 				body:        "https://example.com",
 				contentType: "text/plain",
@@ -45,6 +50,22 @@ func Test_HandlersCreate(t *testing.T) {
 			want: want{
 				code:        http.StatusCreated,
 				contentType: "text/plain",
+				hasCookie:   true,
+				cookieName:  "auth_token",
+			},
+		},
+		{
+			name: "successful URL creation - valid cookie",
+			input: input{
+				body:        "https://example2.com",
+				contentType: "text/plain",
+				cookieValue: "valid-jwt-with-userid",
+			},
+			want: want{
+				code:        http.StatusCreated,
+				contentType: "text/plain",
+				hasCookie:   true,
+				cookieName:  "auth_token",
 			},
 		},
 		{
@@ -112,15 +133,24 @@ func Test_HandlersCreate(t *testing.T) {
 			// create Request
 			r := httptest.NewRequest(testMethod, testPath, strings.NewReader(tt.input.body))
 			r.Header.Set("Content-Type", tt.input.contentType)
+
+			// add cookie
+			if tt.input.cookieValue != "" {
+				r.AddCookie(&http.Cookie{
+					Name:  "auth_token",
+					Value: tt.input.cookieValue,
+				})
+			}
+
 			// create ResponseWriter
 			w := httptest.NewRecorder()
-
 			var baseURL string
 			if tt.input.baseURL != "" {
 				baseURL = tt.input.baseURL
 			} else {
 				baseURL = cfg.BaseURL
 			}
+
 			handlers := NewURLHandlers(storage, baseURL, gen)
 			handlers.Create(w, r)
 
@@ -131,6 +161,19 @@ func Test_HandlersCreate(t *testing.T) {
 
 			// check status code
 			assert.Equal(t, tt.want.code, res.StatusCode)
+
+			// check cookie
+			setCookie := res.Header.Get("Set-Cookie")
+			if tt.want.hasCookie != (setCookie == "") {
+				if tt.want.hasCookie {
+					assert.NotEmpty(t, setCookie, "should set Set-Cookie header")
+					assert.Contains(t, setCookie, "auth_token=")
+					assert.Contains(t, setCookie, "HttpOnly")
+					assert.Contains(t, setCookie, "; Path=/")
+				} else {
+					assert.Empty(t, setCookie, "should not set cookie on error")
+				}
+			}
 
 			if tt.want.code == http.StatusCreated {
 				// check response structure

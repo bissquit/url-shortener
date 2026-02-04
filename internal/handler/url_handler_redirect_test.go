@@ -77,8 +77,9 @@ func Test_HandlersRedirect(t *testing.T) {
 	storage := memory.NewURLStorage()
 	gen := crypto.NewRandomGenerator()
 	// prepare test data
-	storage.Create("skfjnvoe34nk", testShortURL)
-	storage.Create("kjsdfbj4t9bb", testLongURL)
+	const testUserID = "test-redirect-user"
+	storage.Create("skfjnvoe34nk", testShortURL, testUserID) // ← добавить
+	storage.Create("kjsdfbj4t9bb", testLongURL, testUserID)
 	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
 
 	for _, tt := range tests {

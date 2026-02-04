@@ -32,7 +32,10 @@ func Test_NewServer(t *testing.T) {
 }
 
 func Test_ServerRoutes(t *testing.T) {
-	const testShortURL = "https://example.com"
+	const (
+		testShortURL = "https://example.com"
+		userID       = "user-id"
+	)
 
 	tests := []struct {
 		name         string
@@ -56,7 +59,7 @@ func Test_ServerRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   "/skfjnvoe34nk",
 			setupStorage: func(s repository.URLRepository) {
-				s.Create("skfjnvoe34nk", testShortURL)
+				s.Create("skfjnvoe34nk", testShortURL, userID)
 			},
 			wantStatus: http.StatusTemporaryRedirect,
 		},

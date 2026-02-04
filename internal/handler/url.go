@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/bissquit/url-shortener/internal/auth"
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/go-chi/chi/v5"
 )
@@ -35,7 +36,9 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, created, err := generateAndStoreShortURL(body.URL, h)
+	// MiddleWare guarantees userID is always set
+	userID, _ := auth.GetUserIDFromContext(r.Context())
+	shortURL, created, err := generateAndStoreShortURL(body.URL, h, userID)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -153,8 +156,11 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
+		// MiddleWare guarantees userID is always set
+		userID, _ := auth.GetUserIDFromContext(r.Context())
+
 		// 2) Пытаемся вставить целиком
-		err = h.storage.CreateBatch(batch)
+		err = h.storage.CreateBatch(batch, userID)
 
 		switch {
 		case err == nil:
@@ -214,7 +220,9 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, created, err := generateAndStoreShortURL(string(body), h)
+	// MiddleWare guarantees userID is always set
+	userID, _ := auth.GetUserIDFromContext(r.Context())
+	shortURL, created, err := generateAndStoreShortURL(string(body), h, userID)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -247,6 +255,10 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	originalURL, err := h.storage.GetURLByID(id)
+	if err == repository.ErrDeleted {
+		http.Error(w, http.StatusText(http.StatusGone), http.StatusGone)
+		return
+	}
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
@@ -254,4 +266,78 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+func (h *URLHandlers) GetUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if userID == "" || !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	items, err := h.storage.GetURLsByUserID(userID)
+	if err != nil {
+		log.Printf("ERROR: cannot get urls by user %s: %v", userID, err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	if len(items) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	resp := make([]userURLResponseItem, 0, len(items))
+	for _, it := range items {
+		shortURL, err := url.JoinPath(h.baseURL, it.ShortID)
+		if err != nil {
+			log.Printf("ERROR: cannot build short url for %s: %v", it.ShortID, err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		resp = append(resp, userURLResponseItem{
+			ShortURL:    shortURL,
+			OriginalURL: it.OriginalURL,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("ERROR: cannot encode user urls: %v", err)
+	}
+}
+
+func (h *URLHandlers) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if userID == "" || !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	defer r.Body.Close()
+	if err != nil {
+		BadRequest(w, "wrong Content-Type")
+		return
+	}
+	if mediaType != "application/json" {
+		BadRequest(w, "Content-Type must be application/json")
+		return
+	}
+
+	var ids []string
+	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
+		BadRequest(w, "Cannot read request body")
+		return
+	}
+
+	if len(ids) != 0 {
+		go func(userID string, ids []string) {
+			if err := h.storage.DeleteBatch(userID, ids); err != nil {
+				log.Printf("delete batch failed: user=%s, ids=%v, err=%v", userID, ids, err)
+			}
+		}(userID, ids)
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

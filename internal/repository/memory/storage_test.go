@@ -11,17 +11,18 @@ func Test_URLStorageCreate(t *testing.T) {
 	const (
 		id     = "same-id"
 		url    = "http://example.com"
+		userID = "same-user-id"
 		urlNew = "http://another-url"
 	)
 
 	s := NewURLStorage()
 
 	// create new
-	err := s.Create(id, url)
+	err := s.Create(id, url, userID)
 	assert.NoError(t, err)
 
 	// trying to create existed
-	err = s.Create(id, urlNew)
+	err = s.Create(id, urlNew, userID)
 	assert.Error(t, err)
 	// check not rewrited
 	u, err := s.GetURLByID(id)
@@ -32,12 +33,13 @@ func Test_URLStorageCreate(t *testing.T) {
 
 func Test_URLStorageGet(t *testing.T) {
 	const (
-		id  = "id"
-		url = "http://example.com"
+		id     = "id"
+		url    = "http://example.com"
+		userID = "same-user-id"
 	)
 
 	s := NewURLStorage()
-	s.Create(id, url)
+	s.Create(id, url, userID)
 
 	u, err := s.GetURLByID(id)
 	assert.NoError(t, err)

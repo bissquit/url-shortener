@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lib/pq"
 )
 
 type PGStorage struct {
@@ -23,7 +24,7 @@ func NewDBStorage(p *pgxpool.Pool) *PGStorage {
 	}
 }
 
-func (s *PGStorage) Create(id string, originalURL string) error {
+func (s *PGStorage) Create(id string, originalURL, userID string) error {
 	if id == "" {
 		return fmt.Errorf("%w", repository.ErrEmptyID)
 	}
@@ -32,8 +33,8 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 	defer cancel()
 
 	_, err := s.pool.Exec(ctx,
-		"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)",
-		id, originalURL,
+		"INSERT INTO urls (short_id, original_url, user_id) VALUES ($1, $2, $3)",
+		id, originalURL, userID,
 	)
 	if err == nil {
 		return nil
@@ -51,7 +52,7 @@ func (s *PGStorage) Create(id string, originalURL string) error {
 	return err
 }
 
-func (s *PGStorage) CreateBatch(items []repository.URLItem) error {
+func (s *PGStorage) CreateBatch(items []repository.URLItem, userID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -67,8 +68,8 @@ func (s *PGStorage) CreateBatch(items []repository.URLItem) error {
 		}
 
 		_, err = tx.Exec(ctx,
-			"INSERT INTO urls (short_id, original_url) VALUES ($1, $2)",
-			item.ID, item.OriginalURL,
+			"INSERT INTO urls (short_id, original_url, user_id) VALUES ($1, $2, $3)",
+			item.ID, item.OriginalURL, userID,
 		)
 		if err != nil {
 			var pgErr *pgconn.PgError
@@ -89,40 +90,87 @@ func (s *PGStorage) GetURLByID(id string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	raw := s.pool.QueryRow(ctx,
-		"SELECT original_url FROM urls WHERE short_id = $1", id)
+	row := s.pool.QueryRow(ctx,
+		"SELECT original_url, is_deleted FROM urls WHERE short_id = $1", id)
 
-	var url string
-	err := raw.Scan(&url)
-
-	if err == nil {
-		return url, nil
-	}
-
+	var originalURL string
+	var deleted bool
+	err := row.Scan(&originalURL, &deleted)
 	if err == pgx.ErrNoRows {
 		return "", repository.ErrNotFound
 	}
+	if err != nil {
+		return "", err
+	}
+	if deleted {
+		return "", repository.ErrDeleted
+	}
 
-	return "", err
+	return originalURL, nil
 }
 
 func (s *PGStorage) GetIDByURL(url string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	raw := s.pool.QueryRow(ctx,
-		"SELECT short_id FROM urls WHERE original_url = $1", url)
+	row := s.pool.QueryRow(ctx,
+		"SELECT short_id, is_deleted FROM urls WHERE original_url = $1", url)
 
 	var id string
-	err := raw.Scan(&id)
-
-	if err == nil {
-		return id, nil
-	}
-
+	var deleted bool
+	err := row.Scan(&id, &deleted)
 	if err == pgx.ErrNoRows {
 		return "", repository.ErrNotFound
 	}
+	if err != nil {
+		return "", err
+	}
+	if deleted {
+		return "", repository.ErrDeleted
+	}
 
-	return "", err
+	return id, nil
+}
+
+func (s *PGStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx,
+		"SELECT short_id, original_url, is_deleted FROM urls WHERE user_id = $1", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []repository.UserURL
+	for rows.Next() {
+		var shortID, originalURL string
+		var deleted bool
+		if err = rows.Scan(&shortID, &originalURL, &deleted); err != nil {
+			return nil, err
+		}
+		if !deleted {
+			items = append(items, repository.UserURL{
+				ShortID:     shortID,
+				OriginalURL: originalURL,
+			})
+		}
+	}
+
+	return items, rows.Err()
+}
+
+func (s *PGStorage) DeleteBatch(userID string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, err := s.pool.Exec(ctx,
+		"UPDATE urls SET is_deleted = TRUE WHERE user_id = $1 AND short_id = ANY($2)",
+		userID, pq.Array(ids))
+	return err
 }
