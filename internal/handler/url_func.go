@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/service"
 )
@@ -15,13 +16,20 @@ type URLHandlers struct {
 	storage   repository.URLRepository
 	baseURL   string
 	generator service.IDGenerator
+	auditor   *audit.Service
 }
 
-func NewURLHandlers(storage repository.URLRepository, baseURL string, generator service.IDGenerator) *URLHandlers {
+func NewURLHandlers(
+	storage repository.URLRepository,
+	baseURL string,
+	generator service.IDGenerator,
+	auditor *audit.Service,
+) *URLHandlers {
 	return &URLHandlers{
 		storage:   storage,
 		baseURL:   baseURL,
 		generator: generator,
+		auditor:   auditor,
 	}
 }
 

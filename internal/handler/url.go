@@ -8,7 +8,9 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/auth"
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/go-chi/chi/v5"
@@ -57,6 +59,13 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+
+	h.auditor.NotifyAll(audit.Event{
+		Timestamp: time.Now().Unix(),
+		Action:    "shorten",
+		UserID:    userID,
+		URL:       body.URL,
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -234,6 +243,13 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 
+	h.auditor.NotifyAll(audit.Event{
+		Timestamp: time.Now().Unix(),
+		Action:    "shorten",
+		UserID:    userID,
+		URL:       string(body),
+	})
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	w.Write([]byte(shortURL))
@@ -263,6 +279,13 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
+
+	h.auditor.NotifyAll(audit.Event{
+		Timestamp: time.Now().Unix(),
+		Action:    "follow",
+		UserID:    "",
+		URL:       originalURL,
+	})
 
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
