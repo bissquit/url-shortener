@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 	"github.com/bissquit/url-shortener/internal/service/crypto"
@@ -153,7 +154,8 @@ func Test_HandlersCreateJSON(t *testing.T) {
 			} else {
 				baseURL = cfg.BaseURL
 			}
-			handlers := NewURLHandlers(storage, baseURL, gen)
+			a := audit.NewService()
+			handlers := NewURLHandlers(storage, baseURL, gen, a)
 			handlers.CreateJSON(w, r)
 
 			res := w.Result()
@@ -198,7 +200,8 @@ func Test_HandlersCreateJSON_BodyError(t *testing.T) {
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	gen := crypto.NewRandomGenerator()
-	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
+	a := audit.NewService()
+	handlers := NewURLHandlers(storage, cfg.BaseURL, gen, a)
 
 	// replace io.Reader to emulate body error
 	r := httptest.NewRequest(http.MethodPost, "/api/shorten", errorReader{})
