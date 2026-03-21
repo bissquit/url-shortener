@@ -25,3 +25,6 @@ vendor/
 # custom
 coverage.html
 storage.json
+cookies.txt
+cover.out
+coverage.html
