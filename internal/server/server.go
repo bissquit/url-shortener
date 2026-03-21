@@ -15,6 +15,7 @@ import (
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/service"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -54,6 +55,8 @@ func (s *Server) setupRoutes() {
 	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		handler.BadRequest(w, "Method not allowed")
 	})
+
+	s.router.Mount("/debug/pprof", middleware.Profiler())
 
 	auditor := audit.NewService()
 	if s.config.AuditFilePath != "" {
