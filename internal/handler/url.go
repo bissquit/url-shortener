@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// CreateJSON handles create request in Content-Type application/json format
 func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	defer r.Body.Close()
@@ -75,6 +76,7 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CreateBatch creates shorten urls from a batch
 func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	defer r.Body.Close()
@@ -207,6 +209,7 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
+// Create is a basic functions to create shorten url
 func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	defer r.Body.Close()
@@ -255,6 +258,7 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(shortURL))
 }
 
+// Redirect is a redirect function to make a redirect from shorten url to target url
 func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 	var id string
 	// Chi params is only set when Chi router is configured
@@ -291,6 +295,7 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
+// GetUserURLs returns user's urls
 func (h *URLHandlers) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if userID == "" || !ok {
@@ -330,6 +335,7 @@ func (h *URLHandlers) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteUserURLs deletes user's urls
 func (h *URLHandlers) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if userID == "" || !ok {
