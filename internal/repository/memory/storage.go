@@ -138,7 +138,7 @@ func (s *URLStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 
-	var userURLs []repository.UserURL
+	userURLs := make([]repository.UserURL, 0, len(s.data))
 
 	for id, item := range s.data {
 		if item.UserID == userID && !item.DeletedFlag {

@@ -222,19 +222,20 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	rawBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		BadRequest(w, "Cannot read request body")
 		return
 	}
-	if err := validateURL(string(body)); err != nil {
+	bodyStr := string(rawBody)
+	if err := validateURL(bodyStr); err != nil {
 		BadRequest(w, err.Error())
 		return
 	}
 
 	// MiddleWare guarantees userID is always set
 	userID, _ := auth.GetUserIDFromContext(r.Context())
-	shortURL, created, err := generateAndStoreShortURL(string(body), h, userID)
+	shortURL, created, err := generateAndStoreShortURL(bodyStr, h, userID)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -250,7 +251,7 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		Timestamp: time.Now().Unix(),
 		Action:    "shorten",
 		UserID:    userID,
-		URL:       string(body),
+		URL:       bodyStr,
 	})
 
 	w.Header().Set("Content-Type", "text/plain")
