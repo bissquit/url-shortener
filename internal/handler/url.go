@@ -8,12 +8,15 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/auth"
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/go-chi/chi/v5"
 )
 
+// CreateJSON handles create request in Content-Type application/json format
 func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	defer r.Body.Close()
@@ -58,6 +61,13 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditor.NotifyAll(audit.Event{
+		Timestamp: time.Now().Unix(),
+		Action:    "shorten",
+		UserID:    userID,
+		URL:       body.URL,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if _, err := w.Write(b); err != nil {
@@ -66,6 +76,7 @@ func (h *URLHandlers) CreateJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CreateBatch creates shorten urls from a batch
 func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	defer r.Body.Close()
@@ -198,6 +209,7 @@ func (h *URLHandlers) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
+// Create is a basic functions to create shorten url
 func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	defer r.Body.Close()
@@ -210,19 +222,20 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	rawBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		BadRequest(w, "Cannot read request body")
 		return
 	}
-	if err := validateURL(string(body)); err != nil {
+	bodyStr := string(rawBody)
+	if err := validateURL(bodyStr); err != nil {
 		BadRequest(w, err.Error())
 		return
 	}
 
 	// MiddleWare guarantees userID is always set
 	userID, _ := auth.GetUserIDFromContext(r.Context())
-	shortURL, created, err := generateAndStoreShortURL(string(body), h, userID)
+	shortURL, created, err := generateAndStoreShortURL(bodyStr, h, userID)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -234,11 +247,19 @@ func (h *URLHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 
+	h.auditor.NotifyAll(audit.Event{
+		Timestamp: time.Now().Unix(),
+		Action:    "shorten",
+		UserID:    userID,
+		URL:       bodyStr,
+	})
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	w.Write([]byte(shortURL))
 }
 
+// Redirect is a redirect function to make a redirect from shorten url to target url
 func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 	var id string
 	// Chi params is only set when Chi router is configured
@@ -264,10 +285,18 @@ func (h *URLHandlers) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditor.NotifyAll(audit.Event{
+		Timestamp: time.Now().Unix(),
+		Action:    "follow",
+		UserID:    "",
+		URL:       originalURL,
+	})
+
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
+// GetUserURLs returns user's urls
 func (h *URLHandlers) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if userID == "" || !ok {
@@ -307,6 +336,7 @@ func (h *URLHandlers) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteUserURLs deletes user's urls
 func (h *URLHandlers) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if userID == "" || !ok {

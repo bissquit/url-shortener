@@ -8,25 +8,28 @@ import (
 	"github.com/bissquit/url-shortener/internal/repository"
 )
 
+// URLStorageItem represents a single URL record in memory storage.
 type URLStorageItem struct {
 	OriginalURL string
 	UserID      string
 	DeletedFlag bool
 }
 
+// URLStorageItemInverted represents an inverted index record mapping original URL to short ID.
 type URLStorageItemInverted struct {
 	ID          string
 	UserID      string
 	DeletedFlag bool
 }
 
-// in-memory url storage
+// URLStorage is a thread-safe in-memory URL storage.
 type URLStorage struct {
 	mux          sync.RWMutex
 	data         map[string]URLStorageItem
 	dataInverted map[string]URLStorageItemInverted
 }
 
+// NewURLStorage creates a new in-memory URL storage.
 func NewURLStorage() repository.URLRepository {
 	return &URLStorage{
 		data:         make(map[string]URLStorageItem),
@@ -34,6 +37,7 @@ func NewURLStorage() repository.URLRepository {
 	}
 }
 
+// Create stores a new short URL mapping.
 func (s *URLStorage) Create(id, originalURL, userID string) error {
 	if id == "" {
 		return fmt.Errorf("%w", repository.ErrEmptyID)
@@ -64,6 +68,7 @@ func (s *URLStorage) Create(id, originalURL, userID string) error {
 	return nil
 }
 
+// CreateBatch stores multiple URL mappings atomically.
 func (s *URLStorage) CreateBatch(items []repository.URLItem, userID string) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -95,8 +100,7 @@ func (s *URLStorage) CreateBatch(items []repository.URLItem, userID string) erro
 	return nil
 }
 
-// Get retrieves the original URL by its short ID.
-// Returns ErrNotFound if the ID doesn't exist.
+// GetURLByID retrieves the original URL by its short ID.
 func (s *URLStorage) GetURLByID(id string) (string, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
@@ -113,6 +117,7 @@ func (s *URLStorage) GetURLByID(id string) (string, error) {
 	return item.OriginalURL, nil
 }
 
+// GetIDByURL retrieves the short ID by original URL.
 func (s *URLStorage) GetIDByURL(url string) (string, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
@@ -128,11 +133,12 @@ func (s *URLStorage) GetIDByURL(url string) (string, error) {
 	return itemInverted.ID, nil
 }
 
+// GetURLsByUserID returns all non-deleted URLs belonging to the given user.
 func (s *URLStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 
-	var userURLs []repository.UserURL
+	userURLs := make([]repository.UserURL, 0, len(s.data))
 
 	for id, item := range s.data {
 		if item.UserID == userID && !item.DeletedFlag {
@@ -146,6 +152,7 @@ func (s *URLStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error
 	return userURLs, nil
 }
 
+// DeleteBatch marks the given URLs as deleted for the specified user.
 func (s *URLStorage) DeleteBatch(userID string, ids []string) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()

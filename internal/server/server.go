@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/auth"
 	"github.com/bissquit/url-shortener/internal/compress"
 	"github.com/bissquit/url-shortener/internal/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/service"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -54,15 +56,25 @@ func (s *Server) setupRoutes() {
 		handler.BadRequest(w, "Method not allowed")
 	})
 
-	h := handler.NewURLHandlers(s.storage, s.config.BaseURL, s.generator)
+	s.router.Mount("/debug/pprof", middleware.Profiler())
+
+	auditor := audit.NewService()
+	if s.config.AuditFilePath != "" {
+		auditor.AddObserver(audit.NewFileObserver(s.config.AuditFilePath))
+	}
+	if s.config.AuditURL != "" {
+		auditor.AddObserver(audit.NewHTTPObserver(s.config.AuditURL))
+	}
+
+	h := handler.NewURLHandlers(s.storage, s.config.BaseURL, s.generator, auditor)
 
 	// post
-	s.router.Post("/", h.Create)
-	s.router.Post("/api/shorten", h.CreateJSON)
+	s.router.Post("/", h.Create)                // audit required
+	s.router.Post("/api/shorten", h.CreateJSON) // audit required
 	s.router.Post("/api/shorten/batch", h.CreateBatch)
 	// get
 	s.router.Get("/", h.Redirect)
-	s.router.Get("/{id}", h.Redirect)
+	s.router.Get("/{id}", h.Redirect) // audit required
 	s.router.Get("/ping", s.Ping)
 	s.router.Get("/api/user/urls", h.GetUserURLs)
 	// delete

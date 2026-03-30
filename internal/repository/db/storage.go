@@ -14,16 +14,19 @@ import (
 	"github.com/lib/pq"
 )
 
+// PGStorage is a PostgreSQL-backed URL storage.
 type PGStorage struct {
 	pool *pgxpool.Pool
 }
 
+// NewDBStorage creates a new PostgreSQL URL storage.
 func NewDBStorage(p *pgxpool.Pool) *PGStorage {
 	return &PGStorage{
 		pool: p,
 	}
 }
 
+// Create stores a new short URL mapping.
 func (s *PGStorage) Create(id string, originalURL, userID string) error {
 	if id == "" {
 		return fmt.Errorf("%w", repository.ErrEmptyID)
@@ -52,6 +55,7 @@ func (s *PGStorage) Create(id string, originalURL, userID string) error {
 	return err
 }
 
+// CreateBatch stores multiple URL mappings in a single transaction.
 func (s *PGStorage) CreateBatch(items []repository.URLItem, userID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -86,6 +90,7 @@ func (s *PGStorage) CreateBatch(items []repository.URLItem, userID string) error
 	return tx.Commit(ctx)
 }
 
+// GetURLByID retrieves the original URL by its short ID.
 func (s *PGStorage) GetURLByID(id string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -109,6 +114,7 @@ func (s *PGStorage) GetURLByID(id string) (string, error) {
 	return originalURL, nil
 }
 
+// GetIDByURL retrieves the short ID by original URL.
 func (s *PGStorage) GetIDByURL(url string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -132,6 +138,7 @@ func (s *PGStorage) GetIDByURL(url string) (string, error) {
 	return id, nil
 }
 
+// GetURLsByUserID returns all non-deleted URLs belonging to the given user.
 func (s *PGStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -161,6 +168,7 @@ func (s *PGStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error)
 	return items, rows.Err()
 }
 
+// DeleteBatch marks the given URLs as deleted for the specified user.
 func (s *PGStorage) DeleteBatch(userID string, ids []string) error {
 	if len(ids) == 0 {
 		return nil

@@ -10,18 +10,21 @@ import (
 	"github.com/bissquit/url-shortener/internal/repository"
 )
 
+// FileStorageItem represents a single URL record in file storage.
 type FileStorageItem struct {
 	OriginalURL string
 	UserID      string
 	DeletedFlag bool
 }
 
+// FileStorageItemInverted represents an inverted index record mapping original URL to short ID.
 type FileStorageItemInverted struct {
 	ID          string
 	UserID      string
 	DeletedFlag bool
 }
 
+// FileStorage is a file-backed URL storage with in-memory cache.
 type FileStorage struct {
 	mux          sync.RWMutex
 	data         map[string]FileStorageItem
@@ -29,6 +32,7 @@ type FileStorage struct {
 	filePath     string
 }
 
+// NewFileStorage creates a new file-backed URL storage and restores data from disk.
 func NewFileStorage(filePath string) (*FileStorage, error) {
 	fs := &FileStorage{
 		data:         make(map[string]FileStorageItem),
@@ -141,6 +145,7 @@ func restoreFromFile(filename string) ([]fileStorageItem, error) {
 	return items, nil
 }
 
+// Create stores a new short URL mapping and persists to disk.
 func (f *FileStorage) Create(id, originalURL, userID string) error {
 	if id == "" {
 		return fmt.Errorf("%w", repository.ErrEmptyID)
@@ -176,6 +181,7 @@ func (f *FileStorage) Create(id, originalURL, userID string) error {
 	return nil
 }
 
+// CreateBatch stores multiple URL mappings and persists to disk.
 func (f *FileStorage) CreateBatch(items []repository.URLItem, userID string) error {
 	f.mux.Lock()
 	defer f.mux.Unlock()
@@ -210,6 +216,7 @@ func (f *FileStorage) CreateBatch(items []repository.URLItem, userID string) err
 	return nil
 }
 
+// GetURLByID retrieves the original URL by its short ID.
 func (f *FileStorage) GetURLByID(id string) (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -226,6 +233,7 @@ func (f *FileStorage) GetURLByID(id string) (string, error) {
 	return item.OriginalURL, nil
 }
 
+// GetIDByURL retrieves the short ID by original URL.
 func (f *FileStorage) GetIDByURL(url string) (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -241,6 +249,7 @@ func (f *FileStorage) GetIDByURL(url string) (string, error) {
 	return itemInverted.ID, nil
 }
 
+// GetURLsByUserID returns all non-deleted URLs belonging to the given user.
 func (f *FileStorage) GetURLsByUserID(userID string) ([]repository.UserURL, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -259,6 +268,7 @@ func (f *FileStorage) GetURLsByUserID(userID string) ([]repository.UserURL, erro
 	return userURLs, nil
 }
 
+// DeleteBatch marks the given URLs as deleted for the specified user and persists to disk.
 func (f *FileStorage) DeleteBatch(userID string, ids []string) error {
 	f.mux.Lock()
 	defer f.mux.Unlock()

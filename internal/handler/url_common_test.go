@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/auth"
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository"
@@ -97,7 +98,8 @@ func Test_generateAndStoreShortURL(t *testing.T) {
 			gen.id = tt.generator.id
 			gen.err = tt.generator.err
 
-			handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
+			a := audit.NewService()
+			handlers := NewURLHandlers(storage, cfg.BaseURL, gen, a)
 
 			rctx := context.WithValue(context.Background(), auth.UserIDKey, testUserID)
 			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testURL))

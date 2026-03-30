@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 	"github.com/bissquit/url-shortener/internal/service/crypto"
@@ -151,7 +152,8 @@ func Test_HandlersCreate(t *testing.T) {
 				baseURL = cfg.BaseURL
 			}
 
-			handlers := NewURLHandlers(storage, baseURL, gen)
+			a := audit.NewService()
+			handlers := NewURLHandlers(storage, baseURL, gen, a)
 			handlers.Create(w, r)
 
 			res := w.Result()
@@ -205,7 +207,8 @@ func Test_HandlersCreateBodyError(t *testing.T) {
 	cfg := config.GetDefaultConfig()
 	storage := memory.NewURLStorage()
 	gen := crypto.NewRandomGenerator()
-	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
+	a := audit.NewService()
+	handlers := NewURLHandlers(storage, cfg.BaseURL, gen, a)
 
 	// replace io.Reader to emulate body error
 	r := httptest.NewRequest(http.MethodPost, "/", errorReader{})

@@ -10,6 +10,8 @@ type Config struct {
 	BaseURL         string
 	FileStoragePath string
 	DSN             string
+	AuditFilePath   string
+	AuditURL        string
 }
 
 func GetDefaultConfig() *Config {
@@ -32,6 +34,10 @@ func GetConfig() *Config {
 		"file storage path (default \"\")")
 	flag.StringVar(&cfg.DSN, "d", cfg.DSN,
 		"Database DSN (default \"\")")
+	flag.StringVar(&cfg.AuditFilePath, "audit-file", cfg.AuditFilePath,
+		"audit file path (default \"\")")
+	flag.StringVar(&cfg.AuditURL, "audit-url", cfg.AuditURL,
+		"audit URL (default \"\")")
 	flag.Parse()
 
 	if envServerAddr := os.Getenv("SERVER_ADDRESS"); envServerAddr != "" {
@@ -45,6 +51,12 @@ func GetConfig() *Config {
 	}
 	if envDSN := os.Getenv("DATABASE_DSN"); envDSN != "" {
 		cfg.DSN = envDSN
+	}
+	if envAuditFilePath := os.Getenv("AUDIT_FILE"); envAuditFilePath != "" {
+		cfg.AuditFilePath = envAuditFilePath
+	}
+	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
+		cfg.AuditURL = envAuditURL
 	}
 
 	return cfg

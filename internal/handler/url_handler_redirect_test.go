@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bissquit/url-shortener/internal/audit"
 	"github.com/bissquit/url-shortener/internal/config"
 	"github.com/bissquit/url-shortener/internal/repository/memory"
 	"github.com/bissquit/url-shortener/internal/service/crypto"
@@ -80,7 +81,8 @@ func Test_HandlersRedirect(t *testing.T) {
 	const testUserID = "test-redirect-user"
 	storage.Create("skfjnvoe34nk", testShortURL, testUserID) // ← добавить
 	storage.Create("kjsdfbj4t9bb", testLongURL, testUserID)
-	handlers := NewURLHandlers(storage, cfg.BaseURL, gen)
+	a := audit.NewService()
+	handlers := NewURLHandlers(storage, cfg.BaseURL, gen, a)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
