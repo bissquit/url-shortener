@@ -17,24 +17,40 @@ var Analyzer = &analysis.Analyzer{
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	for _, file := range pass.Files {
+		// search panic through all files
 		ast.Inspect(file, func(n ast.Node) bool {
-			if n == nil {
-				return true
-			}
-
-			// A CallExpr node represents an expression followed by an argument list
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
 				return true
 			}
+			if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == "panic" {
+				pass.Reportf(call.Pos(), "usage of panic is not allowed")
+			}
+			return true
+		})
 
-			if ident, ok := call.Fun.(*ast.Ident); ok {
-				if ident.Name == "panic" {
-					pass.Reportf(call.Pos(), "usage of panic is not allowed")
-				}
+		// log.Fatal / os.Exit — search outside main() func of package main
+		for _, decl := range file.Decls {
+			funcDecl, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
 			}
 
-			if selectorExpr, ok := call.Fun.(*ast.SelectorExpr); ok {
+			if pass.Pkg.Name() == "main" && funcDecl.Name.Name == "main" {
+				continue
+			}
+
+			ast.Inspect(funcDecl.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+
+				selectorExpr, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+
 				ident, ok := selectorExpr.X.(*ast.Ident)
 				if !ok {
 					return true
@@ -48,9 +64,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				case "os.Exit":
 					pass.Reportf(call.Pos(), "usage of os.Exit is not allowed")
 				}
-			}
-			return true
-		})
+
+				return true
+			})
+		}
 	}
 
 	return nil, nil
