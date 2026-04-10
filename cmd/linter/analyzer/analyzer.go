@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"go/ast"
+	"go/types"
 
 	"golang.org/x/tools/go/analysis"
 )
@@ -56,8 +57,14 @@ func run(pass *analysis.Pass) (interface{}, error) {
 					return true
 				}
 
-				name := ident.Name + "." + selectorExpr.Sel.Name
+				pkgName, ok := pass.TypesInfo.Uses[ident].(*types.PkgName)
+				if !ok {
+					return true
+				}
+				pkgPath := pkgName.Imported().Path() // "os" или "log"
+				funcName := selectorExpr.Sel.Name    // "Exit" или "Fatal"
 
+				name := pkgPath + "." + funcName
 				switch name {
 				case "log.Fatal", "log.Panic":
 					pass.Reportf(call.Pos(), "usage of %s is not allowed", name)
