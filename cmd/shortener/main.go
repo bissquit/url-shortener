@@ -22,24 +22,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var buildVersion string
-var buildDate string
-var buildCommit string
+var (
+	buildVersion string = "N/A"
+	buildDate    string = "N/A"
+	buildCommit  string = "N/A"
+)
 
 func printVersion() {
-	if buildVersion == "" {
-		buildVersion = "N/A"
-	}
-	if buildCommit == "" {
-		buildCommit = "N/A"
-	}
-	if buildDate == "" {
-		buildDate = "N/A"
-	}
-
-	fmt.Printf("Build version: %v", buildVersion)
-	fmt.Printf("Build date: %v", buildDate)
-	fmt.Printf("Build commit: %v", buildCommit)
+	fmt.Printf("Build version: %v\n", buildVersion)
+	fmt.Printf("Build date: %v\n", buildDate)
+	fmt.Printf("Build commit: %v\n", buildCommit)
 }
 
 func main() {
