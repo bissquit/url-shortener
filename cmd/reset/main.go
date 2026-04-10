@@ -6,12 +6,28 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
+var sugar *zap.SugaredLogger
+
+func init() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Printf("Failed to create zap logger: %v", err)
+		logger = zap.NewNop()
+	}
+	sugar = logger.Sugar()
+}
+
 func main() {
+	defer sugar.Sync()
+
 	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -110,13 +126,16 @@ func processDir(dir string) {
 		// форматируем через go/format (аналог gofmt)
 		formatted, err := format.Source([]byte(buf.String()))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "format error in %s: %v\n", dir, err)
+			sugar.Errorw("format error", "dir", dir, "err", err)
 			return
 		}
 
 		outPath := filepath.Join(dir, "reset.gen.go")
-		os.WriteFile(outPath, formatted, 0644)
-		fmt.Printf("generated %s\n", outPath)
+		if err := os.WriteFile(outPath, formatted, 0644); err != nil {
+			sugar.Errorw("write file error", "path", outPath, "err", err)
+			return
+		}
+		sugar.Infow("generated file", "path", outPath)
 	}
 }
 
