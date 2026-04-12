@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +21,18 @@ import (
 	"github.com/bissquit/url-shortener/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var (
+	buildVersion string = "N/A"
+	buildDate    string = "N/A"
+	buildCommit  string = "N/A"
+)
+
+func printVersion() {
+	fmt.Printf("Build version: %v\n", buildVersion)
+	fmt.Printf("Build date: %v\n", buildDate)
+	fmt.Printf("Build commit: %v\n", buildCommit)
+}
 
 func main() {
 	// prepare config
@@ -70,6 +83,8 @@ func main() {
 		Handler: srv.Handler(),
 	}
 	log.Println("server is listening on " + cfg.ServerAddr)
+
+	printVersion()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
