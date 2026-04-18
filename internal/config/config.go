@@ -12,6 +12,7 @@ type Config struct {
 	DSN             string
 	AuditFilePath   string
 	AuditURL        string
+	EnableHTTPS     bool
 }
 
 func GetDefaultConfig() *Config {
@@ -38,6 +39,8 @@ func GetConfig() *Config {
 		"audit file path (default \"\")")
 	flag.StringVar(&cfg.AuditURL, "audit-url", cfg.AuditURL,
 		"audit URL (default \"\")")
+	flag.BoolVar(&cfg.EnableHTTPS, "s", cfg.EnableHTTPS,
+		"enable HTTPS (default false)")
 	flag.Parse()
 
 	if envServerAddr := os.Getenv("SERVER_ADDRESS"); envServerAddr != "" {
@@ -57,6 +60,9 @@ func GetConfig() *Config {
 	}
 	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
 		cfg.AuditURL = envAuditURL
+	}
+	if os.Getenv("ENABLE_HTTPS") != "" {
+		cfg.EnableHTTPS = true
 	}
 
 	return cfg
