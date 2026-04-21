@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 )
@@ -15,6 +16,14 @@ type Config struct {
 	EnableHTTPS     bool
 }
 
+type jsonConfig struct {
+	ServerAddr      string `json:"server_address"`
+	BaseURL         string `json:"base_url"`
+	FileStoragePath string `json:"file_storage_path"`
+	DSN             string `json:"database_dsn"`
+	EnableHTTPS     bool   `json:"enable_https"`
+}
+
 func GetDefaultConfig() *Config {
 	return &Config{
 		ServerAddr:      ":8080",
@@ -27,6 +36,9 @@ func GetDefaultConfig() *Config {
 func GetConfig() *Config {
 	cfg := GetDefaultConfig()
 
+	var configPath string
+	flag.StringVar(&configPath, "c", "", "path to JSON config file")
+	flag.StringVar(&configPath, "config", "", "path to JSON config file")
 	flag.StringVar(&cfg.ServerAddr, "a", cfg.ServerAddr,
 		"server address in host:port format (default :8080)")
 	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL,
@@ -43,6 +55,17 @@ func GetConfig() *Config {
 		"enable HTTPS (default false)")
 	flag.Parse()
 
+	// get path to config file
+	if envConfig := os.Getenv("CONFIG"); envConfig != "" {
+		configPath = envConfig
+	}
+
+	// JSON — low priority
+	if configPath != "" {
+		loadFromJSON(cfg, configPath)
+	}
+
+	// env rewrites JSON
 	if envServerAddr := os.Getenv("SERVER_ADDRESS"); envServerAddr != "" {
 		cfg.ServerAddr = envServerAddr
 	}
@@ -66,4 +89,32 @@ func GetConfig() *Config {
 	}
 
 	return cfg
+}
+
+func loadFromJSON(cfg *Config, path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+
+	var jc jsonConfig
+	if err := json.Unmarshal(data, &jc); err != nil {
+		return
+	}
+
+	if jc.ServerAddr != "" {
+		cfg.ServerAddr = jc.ServerAddr
+	}
+	if jc.BaseURL != "" {
+		cfg.BaseURL = jc.BaseURL
+	}
+	if jc.FileStoragePath != "" {
+		cfg.FileStoragePath = jc.FileStoragePath
+	}
+	if jc.DSN != "" {
+		cfg.DSN = jc.DSN
+	}
+	if jc.EnableHTTPS {
+		cfg.EnableHTTPS = true
+	}
 }
