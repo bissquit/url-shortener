@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
@@ -79,6 +81,8 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/api/user/urls", h.GetUserURLs)
 	// delete
 	s.router.Delete("/api/user/urls", h.DeleteUserURLs)
+	// stats
+	s.router.Get("/api/internal/stats", s.Stats)
 }
 
 func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +102,38 @@ func (s *Server) Ping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// Stats handles GET /api/internal/stats.
+func (s *Server) Stats(w http.ResponseWriter, r *http.Request) {
+	// check trusted subnet
+	if s.config.TrustedSubnet == "" {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
+	_, subnet, err := net.ParseCIDR(s.config.TrustedSubnet)
+	if err != nil {
+		log.Printf("invalid trusted subnet: %v", err)
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
+	ip := net.ParseIP(r.Header.Get("X-Real-IP"))
+	if ip == nil || !subnet.Contains(ip) {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
+	stats, err := s.storage.GetStats()
+	if err != nil {
+		log.Printf("stats error: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }
 
 func (s *Server) Handler() http.Handler {

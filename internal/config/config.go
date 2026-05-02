@@ -14,6 +14,7 @@ type Config struct {
 	AuditFilePath   string
 	AuditURL        string
 	EnableHTTPS     bool
+	TrustedSubnet   string
 }
 
 type jsonConfig struct {
@@ -22,6 +23,7 @@ type jsonConfig struct {
 	FileStoragePath string `json:"file_storage_path"`
 	DSN             string `json:"database_dsn"`
 	EnableHTTPS     bool   `json:"enable_https"`
+	TrustedSubnet   string `json:"trusted_subnet"`
 }
 
 func GetDefaultConfig() *Config {
@@ -53,6 +55,8 @@ func GetConfig() *Config {
 		"audit URL (default \"\")")
 	flag.BoolVar(&cfg.EnableHTTPS, "s", cfg.EnableHTTPS,
 		"enable HTTPS (default false)")
+	flag.StringVar(&cfg.TrustedSubnet, "t", cfg.TrustedSubnet,
+		"trusted subnet in CIDR format (default \"\")")
 	flag.Parse()
 
 	// get path to config file
@@ -87,6 +91,9 @@ func GetConfig() *Config {
 	if os.Getenv("ENABLE_HTTPS") != "" {
 		cfg.EnableHTTPS = true
 	}
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
+		cfg.TrustedSubnet = envTrustedSubnet
+	}
 
 	return cfg
 }
@@ -116,5 +123,8 @@ func loadFromJSON(cfg *Config, path string) {
 	}
 	if jc.EnableHTTPS {
 		cfg.EnableHTTPS = true
+	}
+	if jc.TrustedSubnet != "" {
+		cfg.TrustedSubnet = jc.TrustedSubnet
 	}
 }

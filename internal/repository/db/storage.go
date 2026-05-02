@@ -182,3 +182,14 @@ func (s *PGStorage) DeleteBatch(userID string, ids []string) error {
 		userID, pq.Array(ids))
 	return err
 }
+
+// GetStats returns the number of URLs and unique users.
+func (s *PGStorage) GetStats() (repository.Stats, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var stats repository.Stats
+	err := s.pool.QueryRow(ctx,
+		"SELECT COUNT(*), COUNT(DISTINCT user_id) FROM urls").Scan(&stats.URLs, &stats.Users)
+	return stats, err
+}
