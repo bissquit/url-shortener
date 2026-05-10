@@ -43,6 +43,10 @@ func (f *fakeStorage) DeleteBatch(userID string, ids []string) error {
 	return nil
 }
 
+func (f *fakeStorage) GetStats() (repository.Stats, error) {
+	return repository.Stats{URLs: 10, Users: 3}, nil
+}
+
 // Fake ID generator
 type fakeGenerator struct{}
 

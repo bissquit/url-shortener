@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/bissquit/url-shortener/internal/config"
+	grpcserver "github.com/bissquit/url-shortener/internal/grpcserver"
 	"github.com/bissquit/url-shortener/internal/repository"
 	"github.com/bissquit/url-shortener/internal/repository/db"
 	"github.com/bissquit/url-shortener/internal/repository/disk"
@@ -27,7 +28,9 @@ import (
 	"github.com/bissquit/url-shortener/internal/server"
 	"github.com/bissquit/url-shortener/internal/service/crypto"
 	"github.com/bissquit/url-shortener/migrations"
+	pb "github.com/bissquit/url-shortener/proto"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -94,6 +97,22 @@ func main() {
 
 	printVersion()
 
+	// start gRPC server
+	grpcSrv := grpc.NewServer(grpc.UnaryInterceptor(grpcserver.AuthInterceptor))
+	pb.RegisterShortenerServiceServer(grpcSrv, grpcserver.NewShortenerServer(stg, cfg.BaseURL, gen))
+
+	go func() {
+		lis, err := net.Listen("tcp", ":3200")
+		if err != nil {
+			log.Printf("grpc listen error: %v", err)
+			return
+		}
+		log.Println("gRPC server is listening on :3200")
+		if err := grpcSrv.Serve(lis); err != nil {
+			log.Printf("grpc server error: %v", err)
+		}
+	}()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
@@ -124,6 +143,7 @@ func main() {
 
 	// Shutdown forces ListenAndServe to return ErrServerClosed
 	_ = httpSrv.Shutdown(shutdownCtx)
+	grpcSrv.GracefulStop()
 }
 
 func selfSignedTLSConfig() (*tls.Config, error) {

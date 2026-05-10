@@ -31,6 +31,11 @@ type UserURL struct {
 	OriginalURL string
 }
 
+type Stats struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}
+
 type URLRepository interface {
 	// create
 	Create(id, originalURL, userID string) error
@@ -41,4 +46,5 @@ type URLRepository interface {
 	GetURLByID(id string) (string, error)
 	GetIDByURL(url string) (string, error)
 	GetURLsByUserID(userID string) ([]UserURL, error)
+	GetStats() (Stats, error)
 }

@@ -301,3 +301,18 @@ func (f *FileStorage) DeleteBatch(userID string, ids []string) error {
 
 	return nil
 }
+
+// GetStats returns the number of URLs and unique users.
+func (f *FileStorage) GetStats() (repository.Stats, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	users := make(map[string]struct{})
+	for _, item := range f.data {
+		if !item.DeletedFlag {
+			users[item.UserID] = struct{}{}
+		}
+	}
+
+	return repository.Stats{URLs: len(f.data), Users: len(users)}, nil
+}
